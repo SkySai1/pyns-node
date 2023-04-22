@@ -1,0 +1,5 @@
+dnslib==0.9.23
+greenlet==2.0.2
+psycopg2==2.9.6
+SQLAlchemy==2.0.10
+typing_extensions==4.5.0
