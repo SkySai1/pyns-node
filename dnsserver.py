@@ -25,16 +25,20 @@ def getcache(data):
     return None
 
 def putcache(data, qname, qtype):
+    record = qname+qtype
     global _CACHE
-    _CACHE[qname+qtype] = data
-    threading.Thread(target=clearcache, args=(qname+qtype,)).start()
-    print(f'{datetime.datetime.now()}: {qname+qtype} was cached')
+    if not record in _CACHE:
+        _CACHE[record] = data
+        threading.Thread(target=clearcache, args=(record,)).start()
+        #print(f'{datetime.datetime.now()}: {record} was cached')
 
 def clearcache(cache):
-    time.sleep(10)
+    global _CACHETIME
+    time.sleep(_CACHETIME)
     global _CACHE
-    del _CACHE[cache]
-    print(f'{datetime.datetime.now()}: {cache} was removed from cache')
+    if cache in _CACHE:
+        del _CACHE[cache]
+        #print(f'{datetime.datetime.now()}: {cache} was removed from cache')
 
 # --- UDP socket ---
 
@@ -55,7 +59,10 @@ def makequerie(result, q):
             f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
             )
     data = answer.pack()
-    putcache(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
+    threading.Thread(
+        target=putcache, 
+        args=(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
+        ).start()
     return data
 
 def handle(udp, data, addr):
@@ -79,6 +86,7 @@ def udpsock(udp, ip, port):
 # --- Main Function ---
 if __name__ == "__main__":
     _CACHE = {}
+    _CACHETIME = 1
     try:
         engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@localhost:5432/dnspy")
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
