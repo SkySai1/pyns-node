@@ -2,39 +2,71 @@
 import os
 import sys
 import socket
-import datetime
+import time
 import threading
-from dnslib import DNSRecord, DNSHeader, QTYPE, CLASS, QR, RCODE, OPCODE
+import datetime
+from dnslib import DNSRecord, DNSHeader, DNSQuestion, QTYPE, CLASS, QR, RCODE, OPCODE
 from dnslib import RR, A
+from sqlalchemy import create_engine
 from accessdb import get
 
+# --- Test working
 
-#UDP SOCK
-def resolve(data):
-    data = DNSRecord.parse(data)
+# --- Cahe job ---
+
+def getcache(data):
+    global _CACHE
+    qname = str(DNSRecord.parse(data).get_q().qname)
+    qtype = QTYPE[DNSRecord.parse(data).get_q().qtype]
+    if qname+qtype in _CACHE:
+        answer = data[:2] + _CACHE[qname+qtype][2:]
+        #print('cached')
+        return answer
+    return None
+
+def putcache(data, qname, qtype):
+    global _CACHE
+    _CACHE[qname+qtype] = data
+    threading.Thread(target=clearcache, args=(qname+qtype,)).start()
+    print(f'{datetime.datetime.now()}: {qname+qtype} was cached')
+
+def clearcache(cache):
+    time.sleep(10)
+    global _CACHE
+    del _CACHE[cache]
+    print(f'{datetime.datetime.now()}: {cache} was removed from cache')
+
+# --- UDP socket ---
+
+def resolve(packet):
+    data = DNSRecord.parse(packet)
     Q = {}
     Q['name'] = str(data.get_q().qname)
     Q['class'] = CLASS[data.get_q().qclass]
     Q['type'] = QTYPE[data.get_q().qtype]
-    result = get(Q['name'], Q['class'], Q['type'])
+    result = get(engine, Q['name'], Q['class'], Q['type'])
     return result, data
 
 def makequerie(result, q):
     answer = q.reply()
     for col in result:
         for row in col:
-           answer.add_answer(*RR.fromZone(
+            answer.add_answer(*RR.fromZone(
             f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
             )
-    return answer.pack()
+    data = answer.pack()
+    putcache(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
+    return data
 
 def handle(udp, data, addr):
-    result, q = resolve(data)
-    answer = makequerie(result, q)
+    answer = getcache(data)
+    if not answer:
+        result, q = resolve(data)
+        answer = makequerie(result, q)
     udp.sendto(answer, addr)
-    try:
-        print(f"Querie: {DNSRecord.parse(data).questions}")
-        print(f"Answer: {DNSRecord.parse(answer).rr}")
+    try: pass
+        #print(f"Querie from {addr[0]}: {DNSRecord.parse(data).questions}")
+        #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
     except: pass
 
 def udpsock(udp, ip, port):
@@ -46,7 +78,9 @@ def udpsock(udp, ip, port):
 
 # --- Main Function ---
 if __name__ == "__main__":
+    _CACHE = {}
     try:
+        engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@localhost:5432/dnspy")
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udpsock(udp, '77.73.132.32', 53)
     except KeyboardInterrupt:

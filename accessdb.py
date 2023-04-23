@@ -4,7 +4,6 @@ from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, cre
 from sqlalchemy.orm import declarative_base, Session
 
 # --- DB structure
-engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@localhost:5432/dnspy")
 Base = declarative_base()
 
 class Domains(Base):  
@@ -18,7 +17,7 @@ class Domains(Base):
     data = Column(String(255))
 
 
-def get(qname, qclass, qtype):
+def get(engine, qname, qclass, qtype):
     #print(qname)
     with Session(engine) as conn:
         stmt = (select(Domains)
@@ -41,6 +40,7 @@ def add(d, qtype, rdata):
         conn.close()
 
 if __name__ == "__main__":
+    engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@localhost:5432/dnspy")
     Base.metadata.create_all(engine)
     try:
         argv = sys.argv[1::]
