@@ -1,0 +1,37 @@
+from dnslib import DNSRecord, RR, QTYPE, CLASS
+from sqlalchemy import create_engine
+from accessdb import AccessDB
+from caching import Caching
+
+class Authoritative:
+
+    def __init__(self, engine:create_engine, cachetime:int):
+        self.engine = engine
+        self.cachetime = cachetime
+
+    def resolve(self, packet):
+        data = DNSRecord.parse(packet)
+        db = AccessDB(self.engine)
+        Q = {}
+        Q['name'] = str(data.get_q().qname)
+        Q['class'] = CLASS[data.get_q().qclass]
+        Q['type'] = QTYPE[data.get_q().qtype]
+        result = db.get(Q['name'], Q['class'], Q['type'])
+        return result, data
+
+    def authoritative(self, packet):
+        result, q = Authoritative.resolve(self, packet)
+        if result:
+            answer = q.reply()
+            for col in result:
+                for row in col:
+                    answer.add_answer(*RR.fromZone(
+                    f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
+                    )
+        else:
+            answer = q
+            answer.header.set_rcode(3)
+        data = answer.pack()
+        cache = Caching(self.cachetime)
+        cache.putcache(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
+        return data, int(answer.header.rcode)
