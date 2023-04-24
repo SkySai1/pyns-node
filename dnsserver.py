@@ -5,7 +5,8 @@ import threading
 from sqlalchemy import create_engine
 from authoritative import Authoritative
 from caching import Caching
-from recursive import recursive
+from recursive import Recursive
+from confinit import getconf
 
 # --- Test working
 
@@ -17,7 +18,7 @@ def handle(udp, querie, addr):
     if not answer:
         answer, rcode = auth.authoritative(querie)
     if rcode == 3:
-        answer = recursive(querie)
+        answer = recursive.recursive(querie)
 
     udp.sendto(answer, addr)
     try: pass
@@ -34,10 +35,18 @@ def udpsock(udp, ip, port):
 
 # --- Main Function ---
 if __name__ == "__main__":
+
+    try: _CONF = getconf(sys.argv[1])
+    except IndexError:
+        print('Specify path to config file')
+        sys.exit()
+
+    cache = Caching()
+    engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@127.0.0.1:5432/dnspy")
+    auth = Authoritative(engine, int(_CONF['buffertime']))
+    recursive = Recursive(_CONF['resolver'])
+
     try:
-        cache = Caching(None)
-        engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@127.0.0.1:5432/dnspy")
-        auth = Authoritative(engine, 1)
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udpsock(udp, '77.73.132.32', 53)
     except KeyboardInterrupt:

@@ -5,8 +5,32 @@ import random
 from dnslib import DNSRecord, QTYPE
 from caching import Caching
 
-_RESOLVER = '127.0.0.53'
-_ANSWER = []
+class Recursive:
+
+    def __init__(self, resolver):
+        self.resolver = resolver
+
+    def recursive(self, packet):
+        result = Recursive.extresolve(self.resolver, packet)
+        parsed = DNSRecord.parse(result)
+        ttl = parsed.get_a().ttl
+        qname = str(parsed.get_q().qname)
+        qtype = QTYPE[parsed.get_q().qtype]
+        cache = Caching(ttl)
+        cache.putcache(result, qname, qtype)
+        return result
+
+
+    def extresolve(resolver, q):
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp.settimeout(5)
+        udp.sendto(q, (resolver, 53))
+        answer = udp.recv(512) 
+        return answer
+
+
+# --- Dont work ---
+
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.
     "199.9.14.201",         #b.root-servers.net.
@@ -23,26 +47,6 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
-def recursive(packet):
-    result = extresolve(packet)
-    parsed = DNSRecord.parse(result)
-    ttl = parsed.get_a().ttl
-    qname = str(parsed.get_q().qname)
-    qtype = QTYPE[parsed.get_q().qtype]
-    cache = Caching(ttl)
-    cache.putcache(result, qname, qtype)
-    return result
-
-
-def extresolve(q):
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp.settimeout(5)
-    udp.sendto(q, (_RESOLVER, 53))
-    answer = udp.recv(512) 
-    return answer
-
-
-# --- Dont work ---
 def resolver(q, ns, udp:socket.socket):
     result = None
     udp.sendto(q, (ns, 53))

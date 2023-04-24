@@ -7,7 +7,7 @@ _CACHE = {}
 # --- Cahe job ---
 class Caching:
 
-    def __init__(self, cachetime):
+    def __init__(self, cachetime = None):
         self.cachetime = cachetime
 
     def getcache(self, data):

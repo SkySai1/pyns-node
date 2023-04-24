@@ -5,7 +5,7 @@ from caching import Caching
 
 class Authoritative:
 
-    def __init__(self, engine:create_engine, cachetime:int):
+    def __init__(self, engine:create_engine, cachetime:int|None = 0):
         self.engine = engine
         self.cachetime = cachetime
 
