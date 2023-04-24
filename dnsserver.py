@@ -2,9 +2,10 @@
 import sys
 import socket
 import threading
-import struct
+import os
+import time
 from sqlalchemy import create_engine
-from authoritative import Authoritative
+from authority import Authority
 from caching import Caching
 from recursive import Recursive
 from confinit import getconf
@@ -15,10 +16,12 @@ from confinit import getconf
 # --- UDP socket ---
 
 def handle(udp, querie, addr):
-    answer = cache.getcache(querie)
+    global _COUNT
+    _COUNT +=1
+    answer = _cache.getcache(querie)
     if not answer:
-        answer, rcode = auth.authoritative(querie)
-        if rcode == 3 and allow_recursion is True:
+        answer, rcode = auth.authority(querie)
+        if rcode == 3 and recursion is True:
             answer = recursive.recursive(querie)
 
     udp.sendto(answer, addr)
@@ -38,7 +41,13 @@ def udpsock(udp:socket.socket, ip, port):
         udp.close()
         sys.exit()
 
-
+def counter():
+    global _COUNT
+    while True:
+        l1,_,_ = os.getloadavg()
+        print(f"{_COUNT}: {l1}")
+        _COUNT = 0
+        time.sleep(1)
 
 # --- Main Function ---
 if __name__ == "__main__":
@@ -48,16 +57,19 @@ if __name__ == "__main__":
         print('Specify path to config file')
         sys.exit()
 
-    cache = Caching()
+    # -Variables-
+    _cache = Caching()
+    _COUNT = 0
 
     # -ConfList-
     engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@127.0.0.1:5432/dnspy")
-    auth = Authoritative(engine, int(_CONF['buffertime']))
+    auth = Authority(engine, _CONF['buffertime'])
     recursive = Recursive(_CONF['resolver'])
-    listens = _CONF['listen-ip'].split(' ')
-    port = int(_CONF['listen-port'])
-    allow_recursion = _CONF['allowrecursion']
-    
+    listens = _CONF['listen-ip']
+    port = _CONF['listen-port']
+    recursion = _CONF['recursion']
+
+    threading.Thread(target=counter).start()
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         threading.Thread(target=udpsock, args=(udp, ip, port)).start()

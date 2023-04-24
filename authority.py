@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from accessdb import AccessDB
 from caching import Caching
 
-class Authoritative:
+class Authority:
 
     def __init__(self, engine:create_engine, cachetime:int = 0):
         self.engine = engine
@@ -19,8 +19,8 @@ class Authoritative:
         result = db.get(Q['name'], Q['class'], Q['type'])
         return result, data
 
-    def authoritative(self, packet):
-        result, q = Authoritative.resolve(self, packet)
+    def authority(self, packet):
+        result, q = Authority.resolve(self, packet)
         if result:
             answer = q.reply()
             for col in result:
@@ -29,10 +29,10 @@ class Authoritative:
                     f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
                     )
             answer.header.set_aa(1)
+            cache = Caching(self.cachetime)
+            cache.putcache(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
         else:
             answer = q
             answer.header.set_rcode(3)
         data = answer.pack()
-        cache = Caching(self.cachetime)
-        cache.putcache(data, str(q.get_q().qname), QTYPE[q.get_q().qtype])
         return data, int(answer.header.rcode)

@@ -23,7 +23,6 @@ class AccessDB:
         self.engine = engine
 
     def get(self, qname, qclass, qtype):
-        #print(qname)
         with Session(self.engine) as conn:
             stmt = (select(Domains)
                     .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
