@@ -55,5 +55,5 @@ if __name__ == "__main__":
     except:
         print('specify in order: domain qtype rdata')
         sys.exit()
-    add(d, qtype, rdata)
+    AccessDB.add(d, qtype, rdata)
 
