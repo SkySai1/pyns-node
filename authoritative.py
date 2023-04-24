@@ -28,6 +28,7 @@ class Authoritative:
                     answer.add_answer(*RR.fromZone(
                     f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
                     )
+            answer.header.set_aa(1)
         else:
             answer = q
             answer.header.set_rcode(3)
