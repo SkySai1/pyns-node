@@ -56,7 +56,7 @@ def getip():
     for i in ifaces:
         if 'eth' in i: config['eth'].append(i)
         if 'wlan' in i: config['wlan'].append(i) 
-        if 'ens' in i: config['enp'].append(i)
+        if 'ens' in i: config['ens'].append(i)
     for key in config:
         config[key].sort()
         if config[key]:
