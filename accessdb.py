@@ -1,4 +1,5 @@
 #!./dns/bin/python3
+from functools import lru_cache
 import sys
 from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, create_engine, delete, insert, select, or_
 from sqlalchemy.orm import declarative_base, Session
@@ -16,13 +17,24 @@ class Domains(Base):
     type = Column(String(10))
     data = Column(String(255))
 
+class Cache(Base):  
+    __tablename__ = "cache" 
+    
+    id = Column(BigInteger, primary_key=True)  
+    name = Column(String(255), nullable=False)
+    ttl = Column(Integer, default=60)
+    dclass = Column(String(2), default='IN')   
+    type = Column(String(10))
+    data = Column(String(255))
 
 class AccessDB:
 
     def __init__(self, engine):
         self.engine = engine
-
-    def get(self, qname, qclass, qtype):
+    
+    # -- Get from Authority zones
+    @lru_cache()
+    def getA(self, qname, qclass, qtype):
         with Session(self.engine) as conn:
             stmt = (select(Domains)
                     .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
@@ -31,6 +43,23 @@ class AccessDB:
             )
             result = conn.execute(stmt).all()
             return result
+
+
+    # -- Get from Cache    
+    @lru_cache()
+    def getC(self, qname, qclass, qtype):
+        with Session(self.engine) as conn:
+            stmt = (select(Domains)
+                    .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
+                    .filter(Domains.dclass == qclass)
+                    .filter(Domains.type == qtype)
+            )
+            result = conn.execute(stmt).all()
+            return result
+    
+    # -- Put to Cache
+    def putC(self, rname, ttl, rclass, rtype, rdata):
+        pass
 
     def add(d, qtype, rdata):
         with Session(engine) as conn:

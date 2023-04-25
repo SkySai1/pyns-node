@@ -18,11 +18,15 @@ from confinit import getconf
 def handle(udp, querie, addr):
     global _COUNT
     _COUNT +=1
-    answer = _cache.getcache(querie)
-    if not answer:
-        answer, rcode = auth.authority(querie)
-        if rcode == 3 and recursion is True:
-            answer = recursive.recursive(querie)
+    try:
+        answer = None #_cache.getcache(querie)
+        if not answer:
+            answer, rcode = auth.authority(querie)
+            if rcode == 3 and recursion is True:
+                answer = recursive.recursive(querie)
+    except Exception as e:
+        answer = querie
+        print(e)
 
     udp.sendto(answer, addr)
     try: pass

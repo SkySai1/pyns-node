@@ -2,6 +2,7 @@ import datetime
 import threading
 import time
 from dnslib import DNSRecord, QTYPE, CLASS, QR, RCODE, OPCODE
+from functools import lru_cache
 
 _CACHE = {}
 # --- Cahe job ---
