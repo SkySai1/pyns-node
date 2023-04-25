@@ -1,8 +1,14 @@
 #!./dns/bin/python3
 from functools import lru_cache
+import os
 import sys
 from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, create_engine, delete, insert, select, or_
 from sqlalchemy.orm import declarative_base, Session
+
+from confinit import getconf
+
+def checkconnect(engine:create_engine):
+    engine.connect()
 
 # --- DB structure
 Base = declarative_base()
@@ -30,10 +36,10 @@ class Cache(Base):
 class AccessDB:
 
     def __init__(self, engine):
-        self.engine = engine
-    
+        self.engine = engine   
+
     # -- Get from Authority zones
-    @lru_cache()
+    #@lru_cache()
     def getA(self, qname, qclass, qtype):
         with Session(self.engine) as conn:
             stmt = (select(Domains)
@@ -73,7 +79,11 @@ class AccessDB:
             conn.close()
 
 if __name__ == "__main__":
-    engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@127.0.0.1:5432/dnspy")
+    cpath = f"{os.path.abspath('./')}/dnspy.conf"
+    _CONF = getconf(cpath)
+    engine = create_engine(
+        f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
+    )
     Base.metadata.create_all(engine)
     try:
         argv = sys.argv[1::]

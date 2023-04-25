@@ -9,6 +9,7 @@ from authority import Authority
 from caching import Caching
 from recursive import Recursive
 from confinit import getconf
+from accessdb import checkconnect
 
 # --- Test working
 
@@ -19,7 +20,7 @@ def handle(udp, querie, addr):
     global _COUNT
     _COUNT +=1
     try:
-        answer = None #_cache.getcache(querie)
+        answer = _cache.getcache(querie)
         if not answer:
             answer, rcode = auth.authority(querie)
             if rcode == 3 and recursion is True:
@@ -66,13 +67,19 @@ if __name__ == "__main__":
     _COUNT = 0
 
     # -ConfList-
-    engine = create_engine("postgresql+psycopg2://dnspy:dnspy23./@127.0.0.1:5432/dnspy")
+    engine = create_engine(
+        f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
+    )
     auth = Authority(engine, _CONF['buffertime'])
     recursive = Recursive(_CONF['resolver'])
     listens = _CONF['listen-ip']
     port = _CONF['listen-port']
     recursion = _CONF['recursion']
 
+    try:  checkconnect(engine)
+    except Exception as e: 
+        print(e)
+        sys.exit()
     threading.Thread(target=counter).start()
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

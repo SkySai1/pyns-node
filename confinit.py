@@ -2,6 +2,7 @@
 import os
 import configparser
 import ipaddress
+import sys
 import netifaces
 
 _OPTIONS =[
@@ -9,7 +10,12 @@ _OPTIONS =[
     'recursion',
     'buffertime',
     'listen-ip',
-    'listen-port'
+    'listen-port',
+    'dbuser',
+    'dbpass',
+    'dbhost',
+    'dbport',
+    'dbname'
 ]
 
 def getconf(path):
@@ -37,6 +43,9 @@ def createconf(where, what:configparser.ConfigParser):
 
 def deafultconf():
     config = configparser.ConfigParser()
+    DBUser = str(input('Input USER of your Data Base:\n'))
+    DBPass = str(input('Input PASSWORD of your Data Base\'s user:\n'))
+    DBName = str(input('Input BASENAME of your Data Base\n'))
     config['AUTHORITY'] = {
         "listen-ip": getip(),
         "listen-port": 53,
@@ -45,6 +54,13 @@ def deafultconf():
     config['RESOLVE'] = {
         "recursion": False,
         "resolver": "127.0.0.53"
+    }
+    config['DEFAULT'] = {
+        "dbuser": DBUser,
+        "dbpass": DBPass,
+        "dbhost": '127.0.0.1',
+        "dbport": 5432,
+        "dbname": DBName
     }
     return config
 
@@ -68,7 +84,16 @@ def getip():
 
 if __name__ == "__main__":
     here = f"{os.path.abspath('./')}/dnspy.conf"
-    if not os.path.exists(here):
-        conf = deafultconf()
-        createconf(here, conf)
+    if os.path.exists(here):
+            while True:
+                try:
+                    y = str(input(f"{here} is exists, do you wanna to recreate it? (y/n)\n"))
+                    if y == "n": sys.exit()
+                    elif y == "y": break
+                except ValueError:
+                    pass
+                except KeyboardInterrupt:
+                    sys.exit()
+    conf = deafultconf()
+    createconf(here, conf)
     getconf(here)
