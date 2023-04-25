@@ -1,4 +1,5 @@
 #!./dns/bin/python3
+import datetime
 from functools import lru_cache
 import os
 import sys
@@ -6,12 +7,14 @@ from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, cre
 from sqlalchemy.orm import declarative_base, Session
 
 from confinit import getconf
-
-def checkconnect(engine:create_engine):
-    engine.connect()
-
 # --- DB structure
 Base = declarative_base()
+
+def checkconnect(engine:create_engine):
+    Base.metadata.create_all(engine)
+    engine.connect()
+
+
 
 class Domains(Base):  
     __tablename__ = "domains" 
@@ -32,6 +35,15 @@ class Cache(Base):
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
     data = Column(String(255))
+    cached = Column(DateTime(timezone=True), nullable=False)  
+    expired = Column(DateTime(timezone=True), nullable=False)  
+
+
+def getnow(rise):
+    offset = datetime.timedelta(hours=3)
+    tz = datetime.timezone(offset, name='MSC')
+    now = datetime.datetime.now(tz=tz)
+    return now + datetime.timedelta(0,rise) 
 
 class AccessDB:
 
@@ -39,7 +51,6 @@ class AccessDB:
         self.engine = engine   
 
     # -- Get from Authority zones
-    #@lru_cache()
     def getA(self, qname, qclass, qtype):
         with Session(self.engine) as conn:
             stmt = (select(Domains)
@@ -52,20 +63,38 @@ class AccessDB:
 
 
     # -- Get from Cache    
-    @lru_cache()
     def getC(self, qname, qclass, qtype):
+        print('ask to Cache in DB')
         with Session(self.engine) as conn:
-            stmt = (select(Domains)
-                    .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
-                    .filter(Domains.dclass == qclass)
-                    .filter(Domains.type == qtype)
+            stmt = (select(Cache)
+                    .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
+                    .filter(Cache.dclass == qclass)
+                    .filter(Cache.type == qtype)
             )
             result = conn.execute(stmt).all()
             return result
     
     # -- Put to Cache
     def putC(self, rname, ttl, rclass, rtype, rdata):
-        pass
+        with Session(self.engine) as conn:
+            stmt = (select(Cache)
+                    .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
+                    .filter(Cache.dclass == rclass)
+                    .filter(Cache.type == rtype)
+            )
+            result = conn.execute(stmt).first()
+            if not result:
+                stmt = insert(Cache).values(
+                    name = rname,
+                    ttl = ttl,
+                    dclass = rclass,
+                    type = rtype,
+                    data = rdata,
+                    cached = getnow(0),
+                    expired = getnow(ttl)
+                )
+                conn.execute(stmt)
+                conn.commit()
 
     def add(d, qtype, rdata):
         with Session(engine) as conn:

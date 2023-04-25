@@ -53,7 +53,7 @@ def deafultconf():
     }
     config['RESOLVE'] = {
         "recursion": False,
-        "resolver": "127.0.0.53"
+        "resolver": "8.8.8.8"
     }
     config['DEFAULT'] = {
         "dbuser": DBUser,
