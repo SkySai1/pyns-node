@@ -24,7 +24,8 @@ def qfilter(querie, addr):
             answer, data = auth.authority(querie)
             if int(data.header.rcode) == 3 and recursion is True:
                 answer, data = recursive.recursive(querie)
-            _cache.putcache(data)
+            if data:
+                _cache.putcache(data)
         return answer
     except Exception as e:
         answer = querie
@@ -47,7 +48,8 @@ def udpsock(udp:socket.socket, ip, port):
         udp.bind(server_address)
         while True:
             data, address = udp.recvfrom(512)
-            threading.Thread(target=handle, args=(udp, data, address)).start()
+            if address[0] == '95.165.134.11':
+                threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()

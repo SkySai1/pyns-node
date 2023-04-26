@@ -26,14 +26,16 @@ class Authority:
         result, data = Authority.resolve(self, packet)
         if result:
             answer = data.reply()
-            for col in result:
-                for row in col:
+            for obj in result:
+                for row in obj:
                     answer.add_answer(*RR.fromZone(
                     f"{row.name} {str(row.ttl)} {row.dclass} {row.type} {row.data}")
                     )
-    
+            if answer.get_q().qtype == 1 and answer.get_a().rtype == 5:
+                answer = data
+                answer.header.set_rcode(3)
             answer.header.set_aa(1)
         else:
             answer = data
             answer.header.set_rcode(3)
-        return answer.pack(), data
+        return answer.pack(), answer

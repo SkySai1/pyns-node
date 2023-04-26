@@ -19,6 +19,7 @@ class Caching:
         qtype = QTYPE[data.get_q().qtype]
         if qname+qtype in _CACHE:
             answer = packet[:2] + _CACHE[qname+qtype][2:]
+            #print(f"{qname} was returned from local")
             return answer
         return None
 
@@ -31,11 +32,11 @@ class Caching:
         if not record in _CACHE:
             _CACHE[record] = data.pack()
             threading.Thread(target=cache.clearcache, args=(record,)).start()
-            print(f'{datetime.datetime.now()}: {record} was cached')
+            #print(f'{datetime.datetime.now()}: {record} was cached')
 
     def clearcache(self, cache):
         time.sleep(self.cachetime)
         global _CACHE
         if cache in _CACHE:
-            print(f'{datetime.datetime.now()}: {cache} was uncached')
+            #print(f'{datetime.datetime.now()}: {cache} was uncached')
             del _CACHE[cache]

@@ -1,42 +1,7 @@
 import socket
+import time
 from dnslib import DNSRecord, QTYPE, CLASS
 from accessdb import AccessDB
-#from caching import Caching
-
-class Recursive:
-
-    def __init__(self, resolver, engine):
-        self.resolver = resolver
-        self.engine = engine
-
-    def recursive(self, packet):
-        db = AccessDB(self.engine)
-        result, state = Recursive.extresolve(self.resolver, packet)
-        data = DNSRecord.parse(result)
-        ttl = int(data.get_a().ttl)
-        rdata = str(data.get_a().rdata)
-        if state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-            rname = str(data.get_a().rname)
-            rclass = CLASS[data.get_a().rclass]
-            rtype = QTYPE[data.get_a().rtype]
-            db.putC(rname, ttl, rclass, rtype, rdata)
-        return result, data
-
-
-    def extresolve(resolver, packet):
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp.settimeout(5)
-        try:
-            udp.sendto(packet, (resolver, 53))
-            answer = udp.recv(512)
-            state = True
-        except socket.timeout:
-            answer = packet
-            state = False
-        return answer, state
-
-
-# --- Dont work ---
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.
@@ -54,20 +19,73 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
-def resolver(q, ns, udp:socket.socket):
-    result = None
-    udp.sendto(q, (ns, 53))
+class Recursive:
+
+    def __init__(self, resolver, engine, iscache = True):
+        self.resolver = resolver
+        self.engine = engine
+        self.state = iscache
+
+    def recursive(self, packet):
+        db = AccessDB(self.engine)
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp.settimeout(2)
+        if self.resolver:
+            result = extresolve(self.resolver, packet, udp)
+            return result, None
+        data = resolve(packet, _ROOT, udp)
+        try: result = data.pack()
+        except: result = packet
+        if data and data.rr:
+            for rr in data.rr:
+                ttl = int(rr.ttl)
+                rdata = str(rr.rdata)
+                if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
+                    rname = str(rr.rname)
+                    rclass = CLASS[rr.rclass]
+                    rtype = QTYPE[rr.rtype]
+                    db.putC(rname, ttl, rclass, rtype, rdata)
+        return result, data
+
+
+def extresolve(resolver, packet, udp):
     try:
-        ans, ip = udp.recvfrom(512)
+        udp.sendto(packet, (resolver, 53))
+        answer = udp.recv(512)
     except socket.timeout:
-        return DNSRecord.parse(q)
-    result = DNSRecord.parse(ans)
-    if result.short():
-        return result
-    else:
-        for i in DNSRecord.parse(ans).ar:
-            ip = str(i.rdata)
-            if '.' in ip:
-                #print(ip)
-                result = resolver(q, ip, udp)
-            if result: return result
+        answer = packet
+    return answer
+
+
+def resolve(packet, nslist, udp:socket.socket):
+    if type(nslist) is not list:
+        nslist = [nslist]
+    for ns in nslist:
+        result = None
+        udp.sendto(packet, (ns, 53))
+        try:  
+            ans, ip = udp.recvfrom(512)
+            result = DNSRecord.parse(ans)
+        except: continue
+        #print(result)
+        if result.short():
+            return result
+        elif result.ar:
+            for i in result.ar:
+                ip = str(i.rdata)
+                if '.' in ip:
+                    try: newresult = resolve(packet, ip, udp)
+                    except: continue
+                    if newresult: 
+                        return newresult
+            if result.auth:
+                for a in result.auth:
+                    aQuery=DNSRecord.question(str(a.rdata)).pack()
+                    try: aIp=resolve(aQuery, _ROOT, udp)
+                    except: continue
+                    if aIp:
+                        try: newresult = resolve(packet, aIp.short(), udp)
+                        except: continue
+                        if newresult:
+                            return newresult
+            return result

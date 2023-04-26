@@ -43,22 +43,23 @@ def createconf(where, what:configparser.ConfigParser):
 
 def deafultconf():
     config = configparser.ConfigParser()
+    DBHost = str(input('Input HOSTNAME of your Data Base:\n'))    
     DBUser = str(input('Input USER of your Data Base:\n'))
     DBPass = str(input('Input PASSWORD of your Data Base\'s user:\n'))
     DBName = str(input('Input BASENAME of your Data Base\n'))
     config['AUTHORITY'] = {
         "listen-ip": getip(),
         "listen-port": 53,
-        "buffertime": 1
+        "buffertime": 5
     }
     config['RESOLVE'] = {
         "recursion": False,
-        "resolver": "8.8.8.8"
+        "resolver": ''
     }
     config['DEFAULT'] = {
         "dbuser": DBUser,
         "dbpass": DBPass,
-        "dbhost": '127.0.0.1',
+        "dbhost": DBHost,
         "dbport": 5432,
         "dbname": DBName
     }

@@ -2,6 +2,9 @@ import time
 
 
 def watcher(engine):
-    while True:
-        #print('h')
-        time.sleep(1)
+    try:
+        while True:
+            #print('h')
+            time.sleep(1)
+    except KeyboardInterrupt: 
+        pass

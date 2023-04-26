@@ -45,6 +45,7 @@ def getnow(rise):
     now = datetime.datetime.now(tz=tz)
     return now + datetime.timedelta(0,rise) 
 
+
 class AccessDB:
 
     def __init__(self, engine):
@@ -64,26 +65,57 @@ class AccessDB:
 
     # -- Get from Cache    
     def getC(self, qname, qclass, qtype):
-        print('ask to Cache in DB')
+        #print(f'{qname} ask to Cache in DB')
         with Session(self.engine) as conn:
-            stmt = (select(Cache)
+            if qtype == 'A':
+                stmt = (select(Cache)
                     .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
                     .filter(Cache.dclass == qclass)
-                    .filter(Cache.type == qtype)
-            )
-            result = conn.execute(stmt).all()
+                    .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
+                )
+                result = conn.execute(stmt).all()
+                for obj in result:
+                    for row in obj:
+                        if row.type == 'CNAME':
+                            result = AccessDB.getCNAME(conn, [row.name, row.data])
+            else:
+                stmt = (select(Cache)
+                        .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
+                        .filter(Cache.dclass == qclass)
+                        .filter(Cache.type == qtype)
+                )
+                result = conn.execute(stmt).all()
             return result
     
+    def getCNAME(conn:Session, oneof:list):
+        stmt = (
+            select(Cache)
+            .filter(Cache.name.in_(oneof))
+            .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
+        )
+        result = conn.execute(stmt).all()
+        for obj in result:
+            for row in obj:
+                if row.name == oneof[-1] and row.type == 'CNAME':
+                    oneof.append(row.data)
+                    result = AccessDB.getCNAME(conn, oneof)
+        return result
+
+
+
     # -- Put to Cache
     def putC(self, rname, ttl, rclass, rtype, rdata):
+        #print(f"{rname} try to access in DB")
         with Session(self.engine) as conn:
             stmt = (select(Cache)
                     .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
                     .filter(Cache.dclass == rclass)
                     .filter(Cache.type == rtype)
+                    .filter(Cache.data == rdata)
             )
             result = conn.execute(stmt).first()
             if not result:
+                print(f"{rname} was caching in DB")
                 stmt = insert(Cache).values(
                     name = rname,
                     ttl = ttl,
