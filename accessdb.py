@@ -115,7 +115,6 @@ class AccessDB:
             )
             result = conn.execute(stmt).first()
             if not result:
-                print(f"{rname} was caching in DB")
                 stmt = insert(Cache).values(
                     name = rname,
                     ttl = ttl,

@@ -19,7 +19,7 @@ class Caching:
         qtype = QTYPE[data.get_q().qtype]
         if qname+qtype in _CACHE:
             answer = packet[:2] + _CACHE[qname+qtype][2:]
-            #print(f"{qname} was returned from local")
+            print(f"{qname} was returned from local")
             return answer
         return None
 
