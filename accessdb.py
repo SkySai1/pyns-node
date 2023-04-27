@@ -3,7 +3,7 @@ import datetime
 from functools import lru_cache
 import os
 import sys
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, create_engine, delete, insert, select, or_
+from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String, create_engine, delete, insert, select, or_, not_
 from sqlalchemy.orm import declarative_base, Session
 
 from confinit import getconf
@@ -39,26 +39,28 @@ class Cache(Base):
     expired = Column(DateTime(timezone=True), nullable=False)  
 
 
-def getnow(rise):
-    offset = datetime.timedelta(hours=3)
-    tz = datetime.timezone(offset, name='MSC')
-    now = datetime.datetime.now(tz=tz)
-    return now + datetime.timedelta(0,rise) 
-
-
 class AccessDB:
 
-    def __init__(self, engine):
-        self.engine = engine   
+    def __init__(self, engine, conf):
+        self.engine = engine
+        self.conf = conf
+
 
     # -- Get from Authority zones
-    def getA(self, qname, qclass, qtype):
+    def getA(self, qname, qclass, qtype = None):
+        if type(qtype) is not list: qtype = [qtype]
         with Session(self.engine) as conn:
-            stmt = (select(Domains)
+            if not qtype:
+                stmt = (select(Domains)
+                        .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
+                        .filter(Domains.dclass == qclass)
+                )                
+            else:
+                stmt = (select(Domains)
                     .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
                     .filter(Domains.dclass == qclass)
-                    .filter(Domains.type == qtype)
-            )
+                    .filter(Domains.type.in_(qtype))
+                )
             result = conn.execute(stmt).all()
             return result
 
@@ -121,8 +123,8 @@ class AccessDB:
                     dclass = rclass,
                     type = rtype,
                     data = rdata,
-                    cached = getnow(0),
-                    expired = getnow(ttl)
+                    cached = AccessDB.getnow(self, 0),
+                    expired = AccessDB.getnow(self, ttl)
                 )
                 conn.execute(stmt)
                 conn.commit()
@@ -137,6 +139,12 @@ class AccessDB:
             conn.execute(stmt)
             conn.commit()
             conn.close()
+
+    def getnow(self, rise):
+        offset = datetime.timedelta(hours=self.conf['timedelta'])
+        tz = datetime.timezone(offset)
+        now = datetime.datetime.now(tz=tz)
+        return now + datetime.timedelta(0,rise) 
 
 if __name__ == "__main__":
     cpath = f"{os.path.abspath('./')}/dnspy.conf"
@@ -154,4 +162,3 @@ if __name__ == "__main__":
         print('specify in order: domain qtype rdata')
         sys.exit()
     AccessDB.add(d, qtype, rdata)
-

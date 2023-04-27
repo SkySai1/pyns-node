@@ -21,17 +21,18 @@ _ROOT = [
 
 class Recursive:
 
-    def __init__(self, resolver, engine, iscache = True):
-        self.resolver = resolver
+    def __init__(self, engine, conf, iscache = True):
+        self.conf = conf
         self.engine = engine
         self.state = iscache
 
     def recursive(self, packet):
-        db = AccessDB(self.engine)
+        db = AccessDB(self.engine, self.conf)
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp.settimeout(2)
-        if self.resolver:
-            result = extresolve(self.resolver, packet, udp)
+        resolver = self.conf['resolver']
+        if resolver:
+            result = extresolve(resolver, packet, udp)
             return result, None
         data = resolve(packet, _ROOT, udp)
         try: result = data.pack()

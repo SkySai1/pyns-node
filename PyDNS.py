@@ -13,6 +13,7 @@ from recursive import Recursive
 from confinit import getconf
 from accessdb import checkconnect
 from dbcontrol import watcher
+from dnslib import DNSRecord
 # --- Test working
 
 
@@ -38,9 +39,9 @@ def handle(udp:socket.socket, querie, addr):
     answer = qfilter(querie, addr)
     udp.sendto(answer, addr)
     try: pass
-        #print(f"Querie from {addr[0]}: {DNSRecord.parse(data).questions}")
+        #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
         #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
-    except: pass
+    except Exception as e: pass
 
 def udpsock(udp:socket.socket, ip, port):
     try:
@@ -48,13 +49,18 @@ def udpsock(udp:socket.socket, ip, port):
         udp.bind(server_address)
         while True:
             data, address = udp.recvfrom(512)
-            if address[0] == '95.165.134.11':
+            if address[0] in ['95.165.134.11', '192.168.1.12', '77.73.132.32']:
                 threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
 
 def start(listens):
+    global _COUNT
+    _COUNT = 0
+        # -Counter-
+    #threading.Thread(target=counter).start()
+
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         threading.Thread(target=udpsock, args=(udp, ip, port)).start()
@@ -96,27 +102,29 @@ def Parallel(data):
                 proc.append(p)
     for p in proc:
         p.join()
+
+
 # --- Main Function ---
 if __name__ == "__main__":
-    try: 
-        _CONF = getconf(sys.argv[1])
+    try:
+        _CONF = {}
+        _CONF['init'] = getconf(sys.argv[1])
     except IndexError:
         print('Specify path to config file')
         sys.exit()
 
     # -Variables-
-    _cache = Caching(_CONF['buffertime'])
-    _COUNT = 0
+    
 
     # -ConfList-
-    engine1 = enginer(_CONF)
-    engine2 = enginer(_CONF)
-    auth = Authority(engine1)
-    recursive = Recursive(_CONF['resolver'], engine1)
-    listens = _CONF['listen-ip']
-    port = _CONF['listen-port']
-    recursion = _CONF['recursion']
-
+    engine1 = enginer(_CONF['init'])
+    engine2 = enginer(_CONF['init'])
+    auth = Authority(engine1, _CONF['init'])
+    recursive = Recursive(engine1, _CONF['init'])
+    _cache = Caching(_CONF['init'])
+    listens = _CONF['init']['listen-ip']
+    port = _CONF['init']['listen-port']
+    recursion = _CONF['init']['recursion']
 
     # -Launch server
     proc = [

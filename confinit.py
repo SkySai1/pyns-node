@@ -11,6 +11,7 @@ _OPTIONS =[
     'buffertime',
     'listen-ip',
     'listen-port',
+    'timedelta',
     'dbuser',
     'dbpass',
     'dbhost',
@@ -34,6 +35,7 @@ def filter(config):
     config['buffertime'] = int(config['buffertime'])
     config['listen-port'] = int(config['listen-port'])
     config['listen-ip'] = config['listen-ip'].split(' ')
+    config['timedelta'] = int(config['timedelta'])
     return config
 
 
@@ -57,6 +59,9 @@ def deafultconf():
         "resolver": ''
     }
     config['DEFAULT'] = {
+        "timedelta": 3
+    }
+    config['DATABASE'] = {
         "dbuser": DBUser,
         "dbpass": DBPass,
         "dbhost": DBHost,
