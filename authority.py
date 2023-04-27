@@ -31,11 +31,11 @@ class Authority:
         Q['class'] = CLASS[data.get_q().qclass]
         Q['type'] = QTYPE[data.get_q().qtype]
         auth = None
-        result = db.getA(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
+        result = db.getDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
         if not result: # <- if not exists required RR type then return authority list
-            auth = db.getA(Q['name'], Q['class'], 'NS') # <- Check Authority
+            auth = db.getDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
         if not result and not auth: # <- if not authority list and RR then check in cache
-            result = db.getC(Q['name'], Q['class'], Q['type']) # <- Get RR from Cache Table
+            result = db.getCache(Q['name'], Q['class'], Q['type']) # <- Get RR from Cache Table
         return result, auth, data
     
 def makeanswer(answer:DNSRecord, dbresult, type = None):
