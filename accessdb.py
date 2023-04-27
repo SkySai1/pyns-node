@@ -275,7 +275,7 @@ def first(db:AccessDB):
     ]
     while True:
         try:
-            where = int(input('-1. Select action:\n 1. Zones\n 2. Cache\n'))
+            where = int(input('- Select action:\n 1. Zones\n 2. Cache\n'))
             where -= 1
             return choose[where](db)
         except ValueError:

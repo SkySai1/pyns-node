@@ -38,9 +38,9 @@ def handle(udp:socket.socket, querie, addr):
     _COUNT +=1
     answer = qfilter(querie, addr)
     udp.sendto(answer, addr)
-    try: pass
-        #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
-        #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
+    try: #pass
+        print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
+        print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
     except Exception as e: pass
 
 def udpsock(udp:socket.socket, ip, port):
@@ -48,9 +48,9 @@ def udpsock(udp:socket.socket, ip, port):
         server_address = (ip, port)
         udp.bind(server_address)
         while True:
-            data, address = udp.recvfrom(512)
-            if address[0] in ['95.165.134.11', '192.168.1.12', '77.73.132.32']:
-                threading.Thread(target=handle, args=(udp, data, address)).start()
+            data, address = udp.recvfrom(1024)
+            #if address[0] in ['95.165.134.11']:
+            threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()

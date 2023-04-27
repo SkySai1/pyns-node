@@ -27,6 +27,7 @@ class Recursive:
         self.state = iscache
 
     def recursive(self, packet):
+       
         db = AccessDB(self.engine, self.conf)
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp.settimeout(2)
@@ -64,10 +65,12 @@ def resolve(packet, nslist, udp:socket.socket):
     for ns in nslist:
         result = None
         udp.sendto(packet, (ns, 53))
-        try:  
-            ans, ip = udp.recvfrom(512)
+        try:
+            ans, ip = udp.recvfrom(1024)
             result = DNSRecord.parse(ans)
-        except: continue
+        except Exception as e:
+            print(e)
+            continue
         #print(result)
         if result.short():
             return result
