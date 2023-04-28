@@ -23,24 +23,22 @@ _ROOT = [
 
 class Recursive:
 
-    def __init__(self, engine, conf, iscache = True, depth = 0):
+    def __init__(self, engine, conf, iscache = True):
         self.conf = conf
         self.engine = engine
         self.state = iscache
-        self.depth = depth
-        self.udp = udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp.settimeout(1)
+        self.depth = 0
 
     def recursive(self, packet):
        
         db = AccessDB(self.engine, self.conf)
-        #udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        #udp.settimeout(2)
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp.settimeout(2)
         resolver = self.conf['resolver']
         if resolver:
-            result = Recursive.extresolve(self, resolver, packet)
+            result = Recursive.extresolve(self, resolver, packet, udp)
             return result, None
-        result = Recursive.resolve(self, packet, _ROOT)
+        result = Recursive.resolve(self, packet, _ROOT, udp)
         try: 
             if result.header.rcode == 0 and result.get_a().rdata:
                 for rr in result.rr:
@@ -50,10 +48,10 @@ class Recursive:
                         rname = str(rr.rname)
                         rclass = CLASS[rr.rclass]
                         rtype = QTYPE[rr.rtype]
-                        #db.putC(rname, ttl, rclass, rtype, rdata)
-                self.depth = 0
-                answer = result.pack()
-                return answer, result
+                        db.putC(rname, ttl, rclass, rtype, rdata)
+                #self.depth = 0
+            answer = result.pack()
+            return answer, result
         except:
             logging.exception('Stage: Return answer after resolving')
             result = DNSRecord.parse(packet)
@@ -61,7 +59,7 @@ class Recursive:
             return result.pack(), None
 
 
-    def extresolve(self, resolver, packet):
+    def extresolve(self, resolver, packet, udp):
         try:
             self.udp.sendto(packet, (resolver, 53))
             answer = self.udp.recv(1024)
@@ -71,22 +69,23 @@ class Recursive:
 
 
 
-    def resolve(self, packet, nslist):
+    def resolve(self, packet, nslist, udp):
         if type(nslist) is not list:
             nslist = [nslist] # < - Create list of NameServers if it doesnt
         for ns in nslist:
             try:
-                if self.depth >= 10: 
-                    raise DNSError(f'Reach max recursion depth is {self.depth}!')# <- Set max recursion depth
-                self.depth += 1
-                print(self.depth,': ',ns)
+                #if self.depth >= 10: 
+                #    raise DNSError(f'Reach max recursion depth is {self.depth}!')# <- Set max recursion depth
+                #self.depth += 1
+                #print(self.depth,': ',ns)
                 # -Trying to get answer from authority nameserver-
-                self.udp.sendto(packet, (ns, 53))
-                ans, ip = self.udp.recvfrom(1024)
-                if ans[:2] != packet[:2]:
-                   raise DNSError('ID mismatch!')
+                udp.sendto(packet, (ns, 53))
+                ans, ip = udp.recvfrom(1024)
+                origin = DNSRecord.parse(packet)
                 result = DNSRecord.parse(ans)
-                print(result,'\n\n')
+                if origin.header.id != result.header.id:
+                   raise DNSError('ID mismatch!')
+                #print(result,'\n\n')
             except:
                 logging.exception('Stage: Request to Authoirt NS')
                 result = DNSRecord.parse(packet)
@@ -112,7 +111,7 @@ class Recursive:
                         break
                 if not NewNSlist:
                     nsQuery = DNSRecord.question(str(authRR.rdata)).pack()
-                    result = Recursive.resolve(self, nsQuery, _ROOT)
+                    result = Recursive.resolve(self, nsQuery, _ROOT, udp)
                     try: 
                         if result.short():
                             if type(result.short()) is list:
@@ -123,5 +122,5 @@ class Recursive:
                     except:
                         logging.exception('Stage: Getting IP address for Authority NS') 
                         continue
-            result = Recursive.resolve(self, packet, NewNSlist)
+            result = Recursive.resolve(self, packet, NewNSlist, udp)
             return result

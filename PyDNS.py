@@ -56,8 +56,8 @@ def udpsock(udp:socket.socket, ip, port):
         udp.bind(server_address)
         while True:
             data, address = udp.recvfrom(1024)
-            if address[0] in ['95.165.134.11']:
-                threading.Thread(target=handle, args=(udp, data, address)).start()
+            #if address[0] in ['95.165.134.11']:
+            threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
