@@ -1,8 +1,9 @@
 configparser==5.3.0
 dnslib==0.9.23
-dnspython==2.3.0
 greenlet==2.0.2
 netifaces==0.11.0
+prettytable==3.7.0
 psycopg2==2.9.6
 SQLAlchemy==2.0.10
-typing_extensions==4.5.0
+typing-extensions==4.5.0
+wcwidth==0.2.6
