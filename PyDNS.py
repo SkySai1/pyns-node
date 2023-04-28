@@ -44,9 +44,10 @@ def handle(udp:socket.socket, querie, addr):
         answer.header.set_rcode(2)
         udp.sendto(answer.pack(), addr)
 
-    try: #pass
-        print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
-        print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
+    try:
+        #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
+        #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
+        pass
     except Exception as e: pass
 
 def udpsock(udp:socket.socket, ip, port):

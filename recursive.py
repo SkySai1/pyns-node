@@ -1,6 +1,7 @@
 import socket
 import time
 import ipaddress
+import logging
 from dnslib import DNSRecord, DNSError, QTYPE, CLASS
 from accessdb import AccessDB
 
@@ -27,85 +28,100 @@ class Recursive:
         self.engine = engine
         self.state = iscache
         self.depth = depth
+        self.udp = udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp.settimeout(1)
 
     def recursive(self, packet):
        
         db = AccessDB(self.engine, self.conf)
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp.settimeout(2)
+        #udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        #udp.settimeout(2)
         resolver = self.conf['resolver']
         if resolver:
-            result = Recursive.extresolve(self, resolver, packet, udp)
+            result = Recursive.extresolve(self, resolver, packet)
             return result, None
-        data = Recursive.resolve(self, packet, _ROOT, udp)
+        result = Recursive.resolve(self, packet, _ROOT)
         try: 
-            for rr in data.rr:
-                ttl = int(rr.ttl)
-                rdata = str(rr.rdata)
-                if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                    rname = str(rr.rname)
-                    rclass = CLASS[rr.rclass]
-                    rtype = QTYPE[rr.rtype]
-                    db.putC(rname, ttl, rclass, rtype, rdata)
-            self.depth = 0
-            result = data.pack()
-            return result, data
-        except Exception as e:
+            if result.header.rcode == 0 and result.get_a().rdata:
+                for rr in result.rr:
+                    ttl = int(rr.ttl)
+                    rdata = str(rr.rdata)
+                    if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
+                        rname = str(rr.rname)
+                        rclass = CLASS[rr.rclass]
+                        rtype = QTYPE[rr.rtype]
+                        #db.putC(rname, ttl, rclass, rtype, rdata)
+                self.depth = 0
+                answer = result.pack()
+                return answer, result
+        except:
+            logging.exception('Stage: Return answer after resolving')
             result = DNSRecord.parse(packet)
             result.header.set_rcode(2)
             return result.pack(), None
 
 
-    def extresolve(self, resolver, packet, udp):
+    def extresolve(self, resolver, packet):
         try:
-            udp.sendto(packet, (resolver, 53))
-            answer = udp.recv(512)
+            self.udp.sendto(packet, (resolver, 53))
+            answer = self.udp.recv(1024)
         except socket.timeout:
             answer = packet
         return answer
 
 
 
-    def resolve(self, packet, nslist, udp:socket.socket):
+    def resolve(self, packet, nslist):
         if type(nslist) is not list:
-            nslist = [nslist]
+            nslist = [nslist] # < - Create list of NameServers if it doesnt
         for ns in nslist:
-            if self.depth > 333: return packet
-            self.depth += 1
-            #print('\n\n',self.depth,': ',ns)
-            #result = None
             try:
-                udp.sendto(packet, (ns, 53))
-                ans, ip = udp.recvfrom(1024)
+                if self.depth >= 10: 
+                    raise DNSError(f'Reach max recursion depth is {self.depth}!')# <- Set max recursion depth
+                self.depth += 1
+                print(self.depth,': ',ns)
+                # -Trying to get answer from authority nameserver-
+                self.udp.sendto(packet, (ns, 53))
+                ans, ip = self.udp.recvfrom(1024)
                 if ans[:2] != packet[:2]:
                    raise DNSError('ID mismatch!')
                 result = DNSRecord.parse(ans)
-                #print(result)
-            except Exception as e:
-                print(e)
-                continue
-            if result.short():
-                #print(f'\nSHORT: {result.short()}')
+                print(result,'\n\n')
+            except:
+                logging.exception('Stage: Request to Authoirt NS')
+                result = DNSRecord.parse(packet)
+                result.header.set_rcode(5) 
                 return result
-            if result.ar and not hasattr(result.ar[0], 'edns_len'):
-                #print(f"\n ADDITIONAL\n")
-                for i in result.ar:
-                    ip = str(i.rdata)
-                    if ipaddress.ip_network(ip, False):
-                        try:
-                            result = Recursive.resolve(self, packet, ip, udp)
-                            if result.short(): break
-                        except: continue
-            elif result.auth:
-                #print(f'\n AUTHORITY \n')
-                for a in result.auth:
-                    aQuery=DNSRecord.question(str(a.rdata)).pack()
-                    try: aIp=Recursive.resolve(self, aQuery, _ROOT, udp)
-                    except: continue
-                    if aIp:
-                        try:
-                            result = Recursive.resolve(self, packet, aIp.short(), udp)
-                            if result.short(): break
-                        except: continue
-            #print(f'\nRETURNED\n')
+
+            if result.short(): return result # <- If got a rdata then return it
+            elif not result or not result.auth: # <- And if there is no authority NS then domain doesnt exist
+                result.header.set_rcode(3) 
+                return result
+            
+            NewNSlist = [] # <- IP for authority NS
+            for authRR in result.auth:
+                for arRR in result.ar:
+                    if not arRR.rdata: break
+                    try:
+                        ip = ipaddress.ip_address(str(arRR.rdata))
+                        if (str(arRR.rname).lower() in str(authRR.rdata).lower() and # <- Check for fool
+                            ip.version == 4): # <- Working only with ipv4 addresses
+                            NewNSlist.append(str(ip))
+                    except: 
+                        #logging.exception("message")
+                        break
+                if not NewNSlist:
+                    nsQuery = DNSRecord.question(str(authRR.rdata)).pack()
+                    result = Recursive.resolve(self, nsQuery, _ROOT)
+                    try: 
+                        if result.short():
+                            if type(result.short()) is list:
+                                for ip in result.short():
+                                    NewNSlist.append(str(ip))
+                            else: NewNSlist = result.short()
+                            break
+                    except:
+                        logging.exception('Stage: Getting IP address for Authority NS') 
+                        continue
+            result = Recursive.resolve(self, packet, NewNSlist)
             return result
