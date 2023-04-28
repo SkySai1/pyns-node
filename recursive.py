@@ -1,6 +1,7 @@
 import socket
 import time
-from dnslib import DNSRecord, QTYPE, CLASS
+import ipaddress
+from dnslib import DNSRecord, DNSError, QTYPE, CLASS
 from accessdb import AccessDB
 
 _ROOT = [
@@ -21,10 +22,11 @@ _ROOT = [
 
 class Recursive:
 
-    def __init__(self, engine, conf, iscache = True):
+    def __init__(self, engine, conf, iscache = True, depth = 0):
         self.conf = conf
         self.engine = engine
         self.state = iscache
+        self.depth = depth
 
     def recursive(self, packet):
        
@@ -33,12 +35,10 @@ class Recursive:
         udp.settimeout(2)
         resolver = self.conf['resolver']
         if resolver:
-            result = extresolve(resolver, packet, udp)
+            result = Recursive.extresolve(self, resolver, packet, udp)
             return result, None
-        data = resolve(packet, _ROOT, udp)
-        try: result = data.pack()
-        except: result = packet
-        if data and data.rr:
+        data = Recursive.resolve(self, packet, _ROOT, udp)
+        try: 
             for rr in data.rr:
                 ttl = int(rr.ttl)
                 rdata = str(rr.rdata)
@@ -47,49 +47,65 @@ class Recursive:
                     rclass = CLASS[rr.rclass]
                     rtype = QTYPE[rr.rtype]
                     db.putC(rname, ttl, rclass, rtype, rdata)
-        return result, data
-
-
-def extresolve(resolver, packet, udp):
-    try:
-        udp.sendto(packet, (resolver, 53))
-        answer = udp.recv(512)
-    except socket.timeout:
-        answer = packet
-    return answer
-
-
-def resolve(packet, nslist, udp:socket.socket):
-    if type(nslist) is not list:
-        nslist = [nslist]
-    for ns in nslist:
-        result = None
-        udp.sendto(packet, (ns, 53))
-        try:
-            ans, ip = udp.recvfrom(1024)
-            result = DNSRecord.parse(ans)
+            self.depth = 0
+            result = data.pack()
+            return result, data
         except Exception as e:
-            print(e)
-            continue
-        #print(result)
-        if result.short():
-            return result
-        elif result.ar:
-            for i in result.ar:
-                ip = str(i.rdata)
-                if '.' in ip:
-                    try: newresult = resolve(packet, ip, udp)
-                    except: continue
-                    if newresult: 
-                        return newresult
-            if result.auth:
+            result = DNSRecord.parse(packet)
+            result.header.set_rcode(2)
+            return result.pack(), None
+
+
+    def extresolve(self, resolver, packet, udp):
+        try:
+            udp.sendto(packet, (resolver, 53))
+            answer = udp.recv(512)
+        except socket.timeout:
+            answer = packet
+        return answer
+
+
+
+    def resolve(self, packet, nslist, udp:socket.socket):
+        if type(nslist) is not list:
+            nslist = [nslist]
+        for ns in nslist:
+            if self.depth > 333: return packet
+            self.depth += 1
+            #print('\n\n',self.depth,': ',ns)
+            #result = None
+            try:
+                udp.sendto(packet, (ns, 53))
+                ans, ip = udp.recvfrom(1024)
+                if ans[:2] != packet[:2]:
+                   raise DNSError('ID mismatch!')
+                result = DNSRecord.parse(ans)
+                #print(result)
+            except Exception as e:
+                print(e)
+                continue
+            if result.short():
+                #print(f'\nSHORT: {result.short()}')
+                return result
+            if result.ar and not hasattr(result.ar[0], 'edns_len'):
+                #print(f"\n ADDITIONAL\n")
+                for i in result.ar:
+                    ip = str(i.rdata)
+                    if ipaddress.ip_network(ip, False):
+                        try:
+                            result = Recursive.resolve(self, packet, ip, udp)
+                            if result.short(): break
+                        except: continue
+            elif result.auth:
+                #print(f'\n AUTHORITY \n')
                 for a in result.auth:
                     aQuery=DNSRecord.question(str(a.rdata)).pack()
-                    try: aIp=resolve(aQuery, _ROOT, udp)
+                    try: aIp=Recursive.resolve(self, aQuery, _ROOT, udp)
                     except: continue
                     if aIp:
-                        try: newresult = resolve(packet, aIp.short(), udp)
+                        try:
+                            result = Recursive.resolve(self, packet, aIp.short(), udp)
+                            if result.short(): break
                         except: continue
-                        if newresult:
-                            return newresult
+            #print(f'\nRETURNED\n')
             return result
