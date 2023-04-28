@@ -73,20 +73,23 @@ class Recursive:
         if type(nslist) is not list:
             nslist = [nslist] # < - Create list of NameServers if it doesnt
         for ns in nslist:
-            try:
+
                 #if self.depth >= 10: 
                 #    raise DNSError(f'Reach max recursion depth is {self.depth}!')# <- Set max recursion depth
                 #self.depth += 1
                 #print(self.depth,': ',ns)
+
                 # -Trying to get answer from authority nameserver-
+            try:
                 udp.sendto(packet, (ns, 53))
                 ans, ip = udp.recvfrom(1024)
-                origin = DNSRecord.parse(packet)
                 result = DNSRecord.parse(ans)
-                if origin.header.id != result.header.id:
+                if packet[:2] != ans[:2]:
                    raise DNSError('ID mismatch!')
                 #print(result,'\n\n')
-            except:
+            except socket.timeout:
+                continue
+            except DNSError:
                 logging.exception('Stage: Request to Authoirt NS')
                 result = DNSRecord.parse(packet)
                 result.header.set_rcode(5) 
