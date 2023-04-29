@@ -1,4 +1,5 @@
 #!./dns/bin/python3
+import datetime
 from multiprocessing import Process
 import sys
 import socket
@@ -56,8 +57,8 @@ def udpsock(udp:socket.socket, ip, port):
         udp.bind(server_address)
         while True:
             data, address = udp.recvfrom(1024)
-            #if address[0] in ['95.165.134.11']:
-            threading.Thread(target=handle, args=(udp, data, address)).start()
+            if address[0] in ['95.165.134.11']:
+                threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
@@ -66,7 +67,7 @@ def start(listens):
     global _COUNT
     _COUNT = 0
         # -Counter-
-    #threading.Thread(target=counter).start()
+    threading.Thread(target=counter).start()
 
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -89,8 +90,9 @@ def enginer(_CONF):
 def counter():
     global _COUNT
     while True:
-        l1,_,_ = os.getloadavg()
-        print(f"{_COUNT}: {l1}")
+        l1,l2,l3 = os.getloadavg()
+        now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
+        print(f"{now}\t{_COUNT}\t{l1} {l2} {l3}")
         _COUNT = 0
         time.sleep(1)
         
