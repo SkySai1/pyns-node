@@ -21,6 +21,8 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
+_DEBUG = 0
+
 class Recursive:
 
     def __init__(self, engine, conf, iscache = True):
@@ -31,15 +33,18 @@ class Recursive:
 
     def recursive(self, packet):
        
-        db = AccessDB(self.engine, self.conf)
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp.settimeout(2)
+        db = AccessDB(self.engine, self.conf) # <- Init Data Base
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
+        udp.settimeout(2) # < - Setting timeout
         resolver = self.conf['resolver']
+        # - External resolving if specify external DNS server
         if resolver:
             result = Recursive.extresolve(self, resolver, packet, udp)
             return result, None
+        # - Internal resolging if it is empty
         result = Recursive.resolve(self, packet, _ROOT, udp, 0)
         try: 
+            # - Caching in DB at success resolving
             if result.header.rcode == 0 and result.get_a().rdata:
                 for rr in result.rr:
                     ttl = int(rr.ttl)
@@ -50,8 +55,9 @@ class Recursive:
                         rtype = QTYPE[rr.rtype]
                         db.putC(rname, ttl, rclass, rtype, rdata)
                 #self.depth = 0
-            answer = result.pack()
-            return answer, result
+
+            return result.pack(), result # <- In anyway returns byte's packet and DNS Record data
+        # -In any troubles at process resolving returns request with SERVFAIL code
         except:
             logging.exception('Stage: Return answer after resolving')
             result = DNSRecord.parse(packet)
@@ -61,8 +67,8 @@ class Recursive:
 
     def extresolve(self, resolver, packet, udp):
         try:
-            self.udp.sendto(packet, (resolver, 53))
-            answer = self.udp.recv(1024)
+            udp.sendto(packet, (resolver, 53))
+            answer = udp.recv(1024)
         except socket.timeout:
             answer = packet
         return answer
@@ -78,7 +84,7 @@ class Recursive:
                 if depth >= self.maxdepth: 
                     raise DNSError(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
                 depth += 1
-                #print(depth,': ',ns)
+                '''print(f"{depth}: {ns}", 1)'''
             except DNSError:
                 result = DNSRecord.parse(packet)
                 result.header.set_rcode(5)
@@ -92,9 +98,11 @@ class Recursive:
                 result = DNSRecord.parse(ans)
                 if packet[:2] != ans[:2]:
                    raise DNSError('ID mismatch!')
-                #print(result,'\n\n')
-            except (socket.timeout, DNSError):
+                '''print(result,'\n\n')'''
+            except DNSError:
                 logging.exception(f'Resolve: #2')
+                continue
+            except socket.timeout:
                 continue
 
             if result.short(): return result # <- If got a rdata then return it
@@ -102,7 +110,7 @@ class Recursive:
                 result.header.set_rcode(3) 
                 return result
             
-            NewNSlist = [] # <- IP for authority NS
+            NewNSlist = [] # <- IP list for authority NS
             for authRR in result.auth:
                 for arRR in result.ar:
                     if not arRR.rdata: continue
@@ -112,7 +120,7 @@ class Recursive:
                             ip.version == 4): # <- Working only with ipv4 addresses
                             NewNSlist.append(str(ip))
                     except: 
-                        #logging.exception("message")
+                        '''logging.exception("message")'''
                         continue
                 if not NewNSlist and authRR.rtype == 2:
                     nsQuery = DNSRecord.question(str(authRR.rdata)).pack()
@@ -122,10 +130,8 @@ class Recursive:
                             result.header.rcode = 5 
                             return result
                         if NSdata.short():
-                            if type(NSdata.short()) is list:
-                                for ip in NSdata.short():
-                                    NewNSlist.append(str(ip))
-                            else: NewNSlist = NSdata.short()
+                            for ip in NSdata.short().split('\n'):
+                                NewNSlist.append(str(ip))
                             break
                     except:
                         logging.exception('Resolve #3:') 
