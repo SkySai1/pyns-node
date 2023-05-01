@@ -1,10 +1,9 @@
-#!./dns/bin/python3
 import datetime
 from functools import lru_cache
 import os
-import re
+import uuid
 import sys
-from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, insert, select, or_, not_
+from sqlalchemy import UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, insert, select, or_, not_
 from sqlalchemy.orm import declarative_base, Session
 from prettytable import PrettyTable
 
@@ -21,7 +20,7 @@ def checkconnect(engine:create_engine):
 class Domains(Base):  
     __tablename__ = "domains" 
     
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     zone_id = Column(Integer, ForeignKey('zones.id'), nullable=False)
     name = Column(String(255), nullable=False)
     ttl = Column(Integer, default=60)
@@ -44,7 +43,7 @@ class Zones(Base):
 class Cache(Base):  
     __tablename__ = "cache" 
     
-    id = Column(BigInteger, primary_key=True)  
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
@@ -52,6 +51,7 @@ class Cache(Base):
     data = Column(String(255))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
+    freeze = Column(Boolean, default=False)
 
 
 class AccessDB:
@@ -79,6 +79,13 @@ class AccessDB:
     def getDomain(self, qname, qclass, qtype = None):
         if type(qtype) is not list: qtype = [qtype]
         with Session(self.engine) as conn:
+            stmt = (select(Zones)
+                    .filter(Zones.name.in_(qname.split('.')))
+
+            )
+            result = conn.execute(stmt).fetchall()
+            for obj in result:
+                print(obj)
             if not qtype:
                 stmt = (select(Domains)
                         .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
@@ -119,7 +126,8 @@ class AccessDB:
                 )
                 result = conn.execute(stmt).all()
             return result
-    
+        
+   
     def getCNAME(conn:Session, oneof:list):
         stmt = (
             select(Cache)
@@ -133,10 +141,11 @@ class AccessDB:
                     oneof.append(row.data)
                     result = AccessDB.getCNAME(conn, oneof)
         return result
+    
 
 
 
-    # -- Put to Cache
+    # -- Cache functions
     def putC(self, rname, ttl, rclass, rtype, rdata):
         #print(f"{rname} try to access in DB")
         with Session(self.engine) as conn:
@@ -160,6 +169,16 @@ class AccessDB:
                 conn.execute(stmt)
                 conn.commit()
 
+    def CacheExpired(self, expired):
+        with Session(self.engine) as conn:
+            stmt = (delete(Cache)
+                    .filter(Cache.expired <= expired)
+                    .filter(Cache.freeze == False)
+                    .returning(Cache.name, Cache.type)
+            )
+            result = conn.scalars(stmt).all()
+            conn.commit()
+
     # -- New zone
     def addZone(self, data):
         with Session(self.engine) as conn:
@@ -179,7 +198,7 @@ class AccessDB:
 
     # -- New domain
     def addDomain(self, d, qtype, rdata):
-        with Session(engine) as conn:
+        with Session(self.engine) as conn:
             stmt = insert(Domains).values(
                 name = d,
                 type = qtype,
@@ -198,108 +217,5 @@ class AccessDB:
 # --- Direct Access to file ---
 
 
-def zonecreator(db:AccessDB):
-    data = {}
-    data['name'] = inputer("- Write to zone name:\n",str)
-    if data['name'][-1] != '.': data['name'] += '.'
 
-    while True:
-        data['type'] = inputer("- Specify one of zone's type: 'm' - master (default), 's' - slave \n",str, 'm')
-        if data['type'] == 'm': 
-            data['type'] = 'master'
-            print(data['type'])
-            break
-        elif data['type'] == 's':
-            data['type'] = 'slave'
-            break
-        print('- Chooose "m" or "s" or enter empty line')
-
-    data['ttl'] = inputer("- Write to serial ttl (60 by default):\n",int, 60)
-    data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
-    data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
-    data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
-    db.addZone(data)
-
-def inputer(text, what, default = False):
-    while True:
-        try:
-            pre = input(text).strip()
-            if not pre:
-                raise ValueError
-            value = what(pre)
-            return value
-        except ValueError:
-            if default is not False and not pre: 
-                value = default
-                return value
-            print(f"\n- it must a {what.__name__}!")
-        except KeyboardInterrupt:
-            print("- Aborted!")
-            sys.exit()
-
-
-def printzones(db:AccessDB):
-    zlist = db.getZones()
-    if not zlist:
-        while True:
-            try:
-                y = str(input("There is no zones, do you wanna to create first? (y/n)\n"))
-                if y == "n": sys.exit()
-                elif y == "y": 
-                    zonecreator(db)
-                    zlist = db.getZones()
-                    break
-            except ValueError:
-                pass
-            except KeyboardInterrupt:
-                sys.exit()
-    print("List of available zones:")
-    for obj in zlist:
-        for row in obj:
-            print(row.name)
-
-def printcache(db:AccessDB):
-    result = db.getCache()
-    if result:
-        t = PrettyTable(['ID', 'Name', 'ttl', 'class', 'type', 'data', 'cached', 'expired'])
-        for obj in result:
-            for row in obj:
-                t.add_row([row.id, row.name, row.ttl, row.dclass, row.type, row.data, row.cached, row.expired])
-        print(t)
-
-
-def first(db:AccessDB):
-    choose = [
-        printzones, 
-        printcache
-    ]
-    while True:
-        try:
-            where = int(input('- Select action:\n 1. Zones\n 2. Cache\n'))
-            where -= 1
-            return choose[where](db)
-        except ValueError:
-            pass
-        except KeyboardInterrupt:
-            print('Aborted')
-            sys.exit()
-
-if __name__ == "__main__":
-    cpath = f"{os.path.abspath('./')}/dnspy.conf"
-    _CONF = {}
-    _CONF['init'] = getconf(cpath)
-    engine = create_engine(
-        f"postgresql+psycopg2://{_CONF['init']['dbuser']}:{_CONF['init']['dbpass']}@{_CONF['init']['dbhost']}:{_CONF['init']['dbport']}/{_CONF['init']['dbname']}"
-    )
-    try: 
-        checkconnect(engine)
-    except: 
-        print('Filed with DB connection')
-        sys.exit()
-
-    Base.metadata.create_all(engine)
-
-    db = AccessDB(engine, _CONF)
-    result = first(db)
-    #print(result)
     
