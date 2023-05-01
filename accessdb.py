@@ -43,7 +43,7 @@ class Zones(Base):
 class Cache(Base):  
     __tablename__ = "cache" 
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   

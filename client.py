@@ -50,21 +50,11 @@ def inputer(text, what, default = False):
 
 def printzones():
     zlist = db.getZones()
-    if not zlist:
-        while True:
-            try:
-                y = str(input("There is no zones, do you wanna to create first? (y/n)\n"))
-                if y == "n": sys.exit()
-                elif y == "y": 
-                    zonecreator(db)
-                    zlist = db.getZones()
-                    break
-            except ValueError:
-                pass
-            except KeyboardInterrupt:
-                sys.exit()
-    print("List of available zones:")
-    t = PrettyTable(['ID', 'Name', 'Type', 'Serial', 'TTL', 'Expire', 'Refresh', 'Retry'])
+    header = ['ID', 'Name', 'Type', 'Serial', 'TTL', 'Expire', 'Refresh', 'Retry']
+    width = (os.get_terminal_size().columns - 46 - header.__len__()*2 - header.__len__())
+    t = PrettyTable(header)
+    t._max_width = {'ID': 5, 'Name':width, 'Type': 7, 'Serial': 10, 'TTL': 6, 'Expire': 6, 'Refresh': 6, 'Retry': 6}
+    t.align = 'l'
     for obj in zlist:
         for row in obj:
             t.add_row([row.id, row.name, row.type, row.serial, row.ttl, row.expire, row.refresh, row.retry])
@@ -73,41 +63,81 @@ def printzones():
     selectel(action, [MainMenu, zonecreator])
     
 
-def printcache():
-    result = db.getCache()
-    if result:
-        t = PrettyTable(['ID', 'Name', 'ttl', 'class', 'type', 'data', 'cached', 'expired'])
-        uuid = []
-        for obj in result:
-            for row in obj:
-                uuid.append(row.id)
-                t.add_row([uuid.index(row.id)+1, row.name, row.ttl, row.dclass, row.type, row.data, row.cached, row.expired])
-        print(t)
-
+def printcache(short:bool = None):
+    if short is None:
+        action = int(input("Choose action:\n 0. Back\n 1. Short info\n 2. Full info\n"))
+        selectel(action, [MainMenu, (printcache, True), (printcache, False)])
+    else:
+        if short is True:
+            result = db.getCache()
+            if result:
+                header = ['№', 'Name', 'ttl', 'type', 'data']
+                width = (os.get_terminal_size().columns - 15 - header.__len__()*2 - header.__len__()) // 2
+                print(width)
+                t = PrettyTable(header)
+                t._max_width = {'N':4, 'Name': width, 'TTL': 6, 'Type': 5, 'data':width}
+                t.align = 'l'
+                id = []
+                for obj in result:
+                    for row in obj:
+                        id.append(row.uuid)
+                        t.add_row([id.index(row.uuid)+1, row.name, row.ttl, row.type, row.data])  
+            print(t,'\n')   
+        if short is False:
+            result = db.getCache()
+            if result:
+                id = []
+                for obj in result:
+                    header = ['Parameter', 'Value']
+                    t = PrettyTable(header)
+                    width = (os.get_terminal_size().columns - header.__len__()*2 - header.__len__() - 10)
+                    t._max_width = {'Parameter': 10, 'Value': width}
+                    t.align = 'l'
+                    for row in obj:
+                        id.append(row.uuid)
+                        t.add_row(['№', id.index(row.uuid)+1])
+                        t.add_row(['Name', row.name])
+                        t.add_row(['UUID',row.uuid])
+                        t.add_row(['TTL', row.ttl]) 
+                        t.add_row(['Class',row.dclass]) 
+                        t.add_row(['Type',row.type])
+                        t.add_row(['Data', row.data])
+                        t.add_row(['Cached', row.cached])
+                        t.add_row(['Expired', row.expired])
+                        t.add_row(['Is Frozen', row.freeze])
+                    print(t,'\n')
         action = int(input("Choose action:\n 0. Return to back\n"))
-        selectel(action, [MainMenu])
+        selectel(action, [printcache])
+
 
 def MainMenu():
-    choose = [
-        printzones, 
-        printcache
-    ]
     action = int(input('- Choose action:\n 0. Exit\n 1. Zones\n 2. Cache\n'))
-    selectel(action, [sys.exit, printzones, printcache])
+    selectel(action, [sys.exit, printzones, printcache, (test, 'one', 2)])
 
-def selectel(*args):
+def selectel(action, functions):
     """First argument is an Action, 
-    the others is cotege of functions
-    like Action, [MainMenu, Zonecreator]"""
-    while True:
-        try:
+    the others is cotege of functions,
+    like (Action, [MainMenu, zonecreator]).
+    For execute of sequence of functions make them into a list,
+    like (Action, [MainMenu, [printzones,zonecreator]])"""
+    try:
+        while True:
             i = 0
-            for arg in args[1]:
-                if args[0] == i: 
-                    arg()
+            for args in functions: # <- get functions list from 2nd arguemnts
+                if action == i: # <- action will linked to number
+                    if type(args) is not list: args = [args] # <- making list of functions if it doesnt
+                    for func in args:
+                        if type(func) is tuple: # <- gives to function arguments if they are exists
+                            func[0](*func[1:])
+                        else:
+                            func()
                 i+=1
-        except ValueError: pass
-        except KeyboardInterrupt: sys.exit()
+            break
+    except ValueError: pass
+    except KeyboardInterrupt: sys.exit()
+
+def test(one, two):
+    print(one,two)
 
 if __name__ == "__main__":
     cpath = f"{os.path.abspath('./')}/dnspy.conf"
