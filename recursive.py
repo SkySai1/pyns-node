@@ -29,7 +29,7 @@ class Recursive:
         self.conf = conf
         self.engine = engine
         self.state = iscache
-        self.maxdepth =  10
+        self.maxdepth =  30
 
     def recursive(self, packet):
        
@@ -84,7 +84,7 @@ class Recursive:
                 if depth >= self.maxdepth: 
                     raise DNSError(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
                 depth += 1
-                '''print(f"{depth}: {ns}", 1)'''
+                print(f"{depth}: {ns}", 1) # <- SOME DEBUG
             except DNSError:
                 result = DNSRecord.parse(packet)
                 result.header.set_rcode(5)
@@ -98,7 +98,7 @@ class Recursive:
                 result = DNSRecord.parse(ans)
                 if packet[:2] != ans[:2]:
                    raise DNSError('ID mismatch!')
-                '''print(result,'\n\n')'''
+                print(result,'\n\n') 
             except DNSError:
                 logging.exception(f'Resolve: #2')
                 continue

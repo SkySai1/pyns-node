@@ -13,7 +13,7 @@ from caching import Caching
 from recursive import Recursive
 from confinit import getconf
 from accessdb import checkconnect
-from dbcontrol import watcher
+from helper import Helper
 from dnslib import DNSRecord
 # --- Test working
 
@@ -57,8 +57,8 @@ def udpsock(udp:socket.socket, ip, port):
         udp.bind(server_address)
         while True:
             data, address = udp.recvfrom(1024)
-            if address[0] in ['95.165.134.11']:
-                threading.Thread(target=handle, args=(udp, data, address)).start()
+            #if address[0] in ['95.165.134.11']:
+            threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
@@ -66,8 +66,8 @@ def udpsock(udp:socket.socket, ip, port):
 def start(listens):
     global _COUNT
     _COUNT = 0
-        # -Counter-
-    threading.Thread(target=counter).start()
+    # -Counter-
+    #threading.Thread(target=counter).start()
 
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -122,22 +122,24 @@ if __name__ == "__main__":
         print('Specify path to config file')
         sys.exit()
 
-    # -Variables-
-    
-
-    # -ConfList-
+    # -DB Engines
     engine1 = enginer(_CONF['init'])
     engine2 = enginer(_CONF['init'])
+
+    # -Init Classes
     auth = Authority(engine1, _CONF['init'])
     recursive = Recursive(engine1, _CONF['init'])
     _cache = Caching(_CONF['init'])
+    helper = Helper(engine2, _CONF['init'])
+
+    # -ConfList-
     listens = _CONF['init']['listen-ip']
     port = _CONF['init']['listen-port']
     recursion = _CONF['init']['recursion']
 
     # -Launch server
     proc = [
-        {watcher: [engine2]}, #Start process which make control for DB
+        {helper.watcher: []}, #Start process which make control for DB
         {start: [listens]} #Start process with UDP listener
     ]
     try:  Parallel(proc)
