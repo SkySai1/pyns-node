@@ -2,9 +2,15 @@
 
 import binascii
 import re
-from dns import tsigkeyring, zone as Zone, query as Q
+import socket
+import dns.query
+import dns.zone
+import dns.tsigkeyring
+import dns.message
+import dns.wire
 from bitstring import BitArray
 from prettytable import PrettyTable
+from dnslib import DNSRecord
 
 class Decoder:
     def __init__(self) -> None:
@@ -142,7 +148,7 @@ def hexdump():
 
 
 def xfr():
-    key = tsigkeyring.from_text({
+    key = dns.tsigkeyring.from_text({
         "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs="
     })
     xfr = Q.xfr(
@@ -152,7 +158,23 @@ def xfr():
         #keyring=key,
         #keyalgorithm='HMAC-SHA256'
     )
-    zone = Zone.from_xfr(xfr)
+    zone = dns.zone.from_xfr(xfr)
     #for i in zone.iterate_rdatas(): print(i[1])
-    print(Zone.to_text()) 
+    print(dns.zone.to_text()) 
 
+def alter():
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    send = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(('192.168.1.10', 53))
+    while True:
+        message, q1, q2 = dns.query.receive_udp(udp)
+        #print(q)
+        
+        print(type(message))
+        reply = dns.message.make_response(message, False)
+        #print(DNSRecord.parse(reply.to_wire()))
+        state = dns.query.send_udp(udp,reply, q2)
+        #print(message.question[0])
+
+if __name__ == "__main__":
+    alter()
