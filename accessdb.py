@@ -22,7 +22,7 @@ class Domains(Base):
     __tablename__ = "domains" 
     
     id = Column(BigInteger, primary_key=True)
-    zone_id = Column(Integer, ForeignKey('zones.id'), nullable=False)
+    zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'), nullable=False)
     name = Column(String(255), nullable=False)
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
