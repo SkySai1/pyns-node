@@ -7,6 +7,7 @@ import threading
 import os
 import time
 import traceback
+import dns.rcode
 from sqlalchemy import create_engine
 from authority import Authority
 from caching import Caching
@@ -26,10 +27,10 @@ def qfilter(querie, addr):
         answer = _cache.getcache(querie)
         if not answer:
             answer, data = auth.authority(querie)
-            if int(data.header.rcode) == 3 and recursion is True:
+            if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
                 answer, data = recursive.recursive(querie)
             if data:
-                _cache.putcache(data)
+                _cache.putcache(answer, data)
         return answer
     except Exception as e:
         answer = querie
