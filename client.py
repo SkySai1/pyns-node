@@ -1,5 +1,6 @@
 #!./dns/bin/python3
 import os
+import socket
 import sys
 
 from prettytable import PrettyTable
@@ -7,6 +8,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session
 from accessdb import AccessDB, checkconnect
 from confinit import getconf
+
+def commandsender(command:tuple):
+    c1, c2, c3 = command
+    command = '%s/%s/%s' % (c1,c2,c3)
+    if c1 == 'axfr':
+        if c2 == 'get':
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect(('127.0.0.1', 5300))
+            s.sendall(command.encode())
+            s.settimeout(2)
+    pass
+
+
 
 def zonecreator():
     data = {}
@@ -27,6 +41,7 @@ def zonecreator():
     data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
     data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
     data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
+    data['serial'] = None
     db.addZone(data)
     printzones()
 
@@ -50,15 +65,16 @@ def inputer(text, what, default = False):
 
 def printzones():
     zlist = db.getZones()
-    header = ['ID', 'Name', 'Type', 'Serial', 'TTL', 'Expire', 'Refresh', 'Retry']
-    width = (os.get_terminal_size().columns - 46 - header.__len__()*2 - header.__len__())
-    t = PrettyTable(header)
-    t._max_width = {'ID': 5, 'Name':width, 'Type': 7, 'Serial': 10, 'TTL': 6, 'Expire': 6, 'Refresh': 6, 'Retry': 6}
-    t.align = 'l'
-    for obj in zlist:
-        for row in obj:
-            t.add_row([row.id, row.name, row.type, row.serial, row.ttl, row.expire, row.refresh, row.retry])
-    print(t)
+    if zlist:
+        header = ['ID', 'Name', 'Type', 'Serial', 'TTL', 'Expire', 'Refresh', 'Retry']
+        width = (os.get_terminal_size().columns - 46 - header.__len__()*2 - header.__len__())
+        t = PrettyTable(header)
+        t._max_width = {'ID': 5, 'Name':width, 'Type': 7, 'Serial': 10, 'TTL': 6, 'Expire': 6, 'Refresh': 6, 'Retry': 6}
+        t.align = 'l'
+        for obj in zlist:
+            for row in obj:
+                t.add_row([row.id, row.name, row.type, row.serial, row.ttl, row.expire, row.refresh, row.retry])
+        print(t)
     action = int(input("Choose action:\n 0. Return to back\n 1. Create new zone\n"))
     selectel(action, [MainMenu, zonecreator])
     
@@ -110,6 +126,10 @@ def printcache(short:bool = None):
         selectel(action, [printcache])
 
 
+def ZonaManager():
+    action = int(input('- Choose action:\n 0. Back\n 1. Show list of zones\n 2. Create new zone\n'))
+
+
 def MainMenu():
     action = int(input('- Choose action:\n 0. Exit\n 1. Zones\n 2. Cache\n'))
     selectel(action, [sys.exit, printzones, printcache, (test, 'one', 2)])
@@ -137,7 +157,8 @@ def selectel(action, functions):
     except KeyboardInterrupt: sys.exit()
 
 def test(one, two):
-    print(one,two)
+    commandsender(('axfr','get', 'tinirog.ru:95.165.134.11'))
+    #print(one,two)
 
 if __name__ == "__main__":
     cpath = f"{os.path.abspath('./')}/dnspy.conf"

@@ -1,9 +1,10 @@
 import datetime
 from functools import lru_cache
+import logging
 import os
 import uuid
 import sys
-from sqlalchemy import UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, insert, select, or_, not_
+from sqlalchemy import UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_
 from sqlalchemy.orm import declarative_base, Session
 from prettytable import PrettyTable
 
@@ -26,7 +27,7 @@ class Domains(Base):
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
-    data = Column(String(255))
+    data = Column(Text)
 
 class Zones(Base):  
     __tablename__ = "zones" 
@@ -53,6 +54,17 @@ class Cache(Base):
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
 
+def enginer(_CONF):
+    try:  
+        engine = create_engine(
+            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
+        )
+        checkconnect(engine)
+        return engine
+    except Exception as e: 
+        print(e)
+        sys.exit()
+
 
 class AccessDB:
 
@@ -64,12 +76,13 @@ class AccessDB:
     # -- Get from Zones
     def getZones(self, name = None):
         with Session(self.engine) as conn:
-            if not name:
-                stmt = select(Zones)
-            else:
-                stmt = select(Zones).filter(Zones.name == name)
             try:
-                result = conn.execute(stmt).fetchall()
+                if not name:
+                    stmt = select(Zones)
+                    result = conn.execute(stmt).fetchall()
+                else:
+                    stmt = select(Zones).filter(Zones.name == name)
+                    result = conn.execute(stmt).fetchone()
                 return result
             except Exception as e:
                 print(e)
@@ -186,15 +199,18 @@ class AccessDB:
                 name = data['name'],
                 type = data['type'],
                 ttl = data['ttl'],
+                serial = data['serial'],
                 expire = data['expire'],
                 refresh = data['refresh'],
                 retry = data['expire']
-            )
+            ).returning(Zones)
             try:
-                conn.execute(stmt)
+                result = conn.scalars(stmt)
                 conn.commit()
+                return result.all()
             except Exception as e:
                 print(e)
+                return False
 
     # -- New domain
     def addDomain(self, d, qtype, rdata):
@@ -207,6 +223,15 @@ class AccessDB:
             conn.execute(stmt)
             conn.commit()
             conn.close()
+
+    def NewDomains(self, data:list):
+        with Session(self.engine) as conn:
+            #stmt = insert(Domains).
+            try:
+                conn.execute(insert(Domains), data)
+                conn.commit()
+            except:
+                logging.exception('NewDomains')
 
     def getnow(self, rise):
         offset = datetime.timedelta(hours=self.conf['timedelta'])

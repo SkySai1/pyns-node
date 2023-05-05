@@ -14,7 +14,9 @@ from recursive import Recursive
 from confinit import getconf
 from accessdb import checkconnect
 from helper import Helper
+from techincal import Tech
 from dnslib import DNSRecord
+from accessdb import enginer
 # --- Test working
 
 
@@ -63,29 +65,36 @@ def udpsock(udp:socket.socket, ip, port):
         udp.close()
         sys.exit()
 
+def techsock():
+    try:
+        tech = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tech.bind(('127.0.0.1', 5300))
+        while True:
+            tech.listen(3)
+            conn, addr = tech.accept()
+            data = conn.recv(4096)
+            t = Tech(_CONF['init'],data,addr)
+            t.worker()
+    except KeyboardInterrupt:
+        tech.close()
+        sys.exit()
+
 def start(listens):
     global _COUNT
     _COUNT = 0
     # -Counter-
     #threading.Thread(target=counter).start()
 
+    # -MainListener for every IP-
     for ip in listens:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         threading.Thread(target=udpsock, args=(udp, ip, port)).start()
 
+    # -TechSocket-
+        threading.Thread(target=techsock).start()
+
 
 # --- Some Functions ---
-def enginer(_CONF):
-    try:  
-        engine = create_engine(
-            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
-        )
-        checkconnect(engine)
-        return engine
-    except Exception as e: 
-        print(e)
-        sys.exit()
-
 
 def counter():
     global _COUNT
