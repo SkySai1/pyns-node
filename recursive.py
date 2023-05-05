@@ -33,7 +33,6 @@ class Recursive:
         self.maxdepth =  30
 
     def recursive(self, packet):
-       
         db = AccessDB(self.engine, self.conf) # <- Init Data Base
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
         udp.settimeout(2) # < - Setting timeout
@@ -57,9 +56,9 @@ class Recursive:
                         rname = str(rr[0])
                         rclass = str(rr[2])
                         rtype = str(rr[3])
-                        db.putC(rname, ttl, rclass, rtype, rdata)
+                        #db.putC(rname, ttl, rclass, rtype, rdata)
                 #self.depth = 0
-            return result.pack(), result # <- In anyway returns byte's packet and DNS Record data
+            return result.pack(), message # <- In anyway returns byte's packet and DNS Record data
         # -In any troubles at process resolving returns request with SERVFAIL code
         except:
             logging.exception('Stage: Return answer after resolving')
