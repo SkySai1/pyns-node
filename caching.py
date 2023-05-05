@@ -12,15 +12,18 @@ class Caching:
     def __init__(self, conf):
         self.conf = conf
 
-    def getcache(self, packet):
+    def getcache(self, query):
         global _CACHE
-        data = DNSRecord.parse(packet)
-        qname = str(data.get_q().qname)
-        qtype = QTYPE[data.get_q().qtype]
-        if qname+qtype in _CACHE:
-            answer = packet[:2] + _CACHE[qname+qtype][2:]
-            #print(f"{qname} was returned from local")
-            return answer
+        qname = str(query.sections[0][0].name)
+        qtype = int(query.sections[0][0].rdtype)
+        qclass = int(query.sections[0][0].rdclass)
+        packet = query.to_wire()
+        if qname in _CACHE:
+            if qtype in _CACHE[qname]:
+                if qclass in _CACHE[qname][qtype]:
+                    answer = packet[:2] + _CACHE[qname][qtype][qclass][2:]
+                    #print(f"{qname} was returned from local")
+                    return answer
         return None
 
     def putcache(self, data:DNSRecord):

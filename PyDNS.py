@@ -38,7 +38,6 @@ def qfilter(querie, addr):
 def handle(udp:socket.socket, querie, addr):
     global _COUNT
     _COUNT +=1
-    querie = querie.to_wire()
     answer = qfilter(querie, addr)
     try: 
         udp.sendto(answer, addr)
@@ -58,11 +57,11 @@ def udpsock(udp:socket.socket, ip, port):
         server_address = (ip, port)
         udp.bind(server_address)
         while True:
-            data,_,addr = dns.query.receive_udp(udp)
+            query,_,addr = dns.query.receive_udp(udp)
             '''data, address = udp.recvfrom(1024)'''
             #if address[0] in ['95.165.134.11']:
             '''threading.Thread(target=handle, args=(udp, data, address)).start()'''
-            threading.Thread(target=handle, args=(udp, data, addr)).start()
+            threading.Thread(target=handle, args=(udp, query, addr)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
