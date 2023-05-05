@@ -1,5 +1,6 @@
 import socket
-import time
+import dns.message
+import dns.rrset
 import ipaddress
 import logging
 from dnslib import DNSRecord, DNSError, QTYPE, CLASS
@@ -43,19 +44,21 @@ class Recursive:
             return result, None
         # - Internal resolging if it is empty
         result = Recursive.resolve(self, packet, _ROOT, udp, 0)
+        responce = result.pack()
+        message = dns.message.from_wire(bytes(responce))
         try: 
             # - Caching in DB at success resolving
-            if result.header.rcode == 0 and result.get_a().rdata:
-                for rr in result.rr:
-                    ttl = int(rr.ttl)
-                    rdata = str(rr.rdata)
+            if int(message.rcode()) == 0 and message.answer:
+                for rr in message.answer:
+                    rr = rr.to_text().split(' ')
+                    ttl = int(rr[1])
+                    rdata = str(rr[4])
                     if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                        rname = str(rr.rname)
-                        rclass = CLASS[rr.rclass]
-                        rtype = QTYPE[rr.rtype]
+                        rname = str(rr[0])
+                        rclass = str(rr[2])
+                        rtype = str(rr[3])
                         db.putC(rname, ttl, rclass, rtype, rdata)
                 #self.depth = 0
-
             return result.pack(), result # <- In anyway returns byte's packet and DNS Record data
         # -In any troubles at process resolving returns request with SERVFAIL code
         except:
