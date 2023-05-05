@@ -2,6 +2,7 @@ import datetime
 import threading
 import time
 import sys
+import dns.message
 from dnslib import DNSRecord, QTYPE, CLASS, QR, RCODE, OPCODE
 from functools import lru_cache
 
@@ -23,14 +24,14 @@ class Caching:
             return answer
         return None
 
-    def putcache(self, data:DNSRecord):
+    def putcache(self, packet, data:dns.message.Message):
         cache = Caching(self.conf)
-        qname = str(data.get_q().qname)
-        qtype = QTYPE[data.get_q().qtype]
+        qname = str(data.question[0].name)
+        qtype = QTYPE[int(data.question[0].rdtype)]
         record = qname+qtype
         global _CACHE
         if not record in _CACHE and self.conf['buffertime'] and self.conf['buffertime'] > 0:
-            _CACHE[record] = data.pack()
+            _CACHE[record] = packet
             threading.Thread(target=cache.clearcache, args=(record,)).start()
             #print(f'{datetime.datetime.now()}: {record} was cached')
 
