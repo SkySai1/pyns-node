@@ -5,6 +5,7 @@ import dns.zone
 import dns.rdatatype
 import dns.rdtypes
 import dns.rdata
+import dns.tsigkeyring
 from dnslib import CLASS, QTYPE
 #from PyDNS import create_engine
 from accessdb import AccessDB, enginer
@@ -16,9 +17,12 @@ class Transfer:
         self.target = target
 
     def getaxfr(self):
+        key = dns.tsigkeyring.from_text({
+        "name": "secret"
+        })
         xfr = dns.query.xfr(
-            '95.165.134.11',
-            'tinirog.ru',
+            self.target,
+            self.zone,
             port=53,
             #keyring=key,
             #keyalgorithm='HMAC-SHA256'
