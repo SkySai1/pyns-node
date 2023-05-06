@@ -8,7 +8,7 @@ import dns.rdatatype
 import dns.rdataclass
 import dns.rcode
 import logging
-from dnslib import DNSRecord, DNSError, QTYPE, CLASS
+from dnslib import DNSRecord, DNSError
 from accessdb import AccessDB
 
 _ROOT = [
@@ -28,6 +28,20 @@ _ROOT = [
 ]
 
 _DEBUG = 0
+
+QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
+        15:'MX', 16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY',
+        28:'AAAA', 29:'LOC', 33:'SRV', 35:'NAPTR', 36:'KX',
+        37:'CERT', 38:'A6', 39:'DNAME', 41:'OPT', 42:'APL',
+        43:'DS', 44:'SSHFP', 45:'IPSECKEY', 46:'RRSIG', 47:'NSEC',
+        48:'DNSKEY', 49:'DHCID', 50:'NSEC3', 51:'NSEC3PARAM',
+        52:'TLSA', 53:'HIP', 55:'HIP', 59:'CDS', 60:'CDNSKEY',
+        61:'OPENPGPKEY', 62:'CSYNC', 63:'ZONEMD', 64:'SVCB',
+        65:'HTTPS', 99:'SPF', 108:'EUI48', 109:'EUI64', 249:'TKEY',
+        250:'TSIG', 251:'IXFR', 252:'AXFR', 255:'ANY', 256:'URI',
+        257:'CAA', 32768:'TA', 32769:'DLV'}
+
+CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Recursive:
 
@@ -54,13 +68,12 @@ class Recursive:
             # - Caching in DB at success resolving
             if int(result.rcode()) == 0 and result.answer:
                 for rr in result.answer:
-                    rr = rr.to_text().split(' ')
-                    ttl = int(rr[1])
-                    rdata = str(rr[4])
+                    rdata= str(rr[0])
+                    ttl = int(rr.ttl)
                     if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                        rname = str(rr[0])
-                        rclass = str(rr[2])
-                        rtype = str(rr[3])
+                        rname = str(rr.name)
+                        rclass = CLASS[rr.rdclass]
+                        rtype = QTYPE[rr.rdtype]
                         db.putC(rname, ttl, rclass, rtype, rdata)
             return  result# <- In anyway returns byte's packet and DNS Record data
         # -In any troubles at process resolving returns request with SERVFAIL code
@@ -90,10 +103,10 @@ class Recursive:
             # -Checking current recursion depth-
             try:
                 if depth >= self.maxdepth: 
-                    raise DNSError(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
+                    raise Exception(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
                 depth += 1
                 '''print(f"{depth}: {ns}")''' # <- SOME DEBUG
-            except DNSError:
+            except:
                 result = dns.message.make_response(rdata)
                 result.set_rcode(2)
                 logging.exception(f'Resolve: #1, qname - {result.question[0].name}')

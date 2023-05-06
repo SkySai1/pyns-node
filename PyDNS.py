@@ -11,6 +11,7 @@ import traceback
 import dns.rcode
 import dns.query
 import dns.message
+import random
 from sqlalchemy import create_engine
 from authority import Authority
 from caching import Caching
@@ -25,8 +26,8 @@ from accessdb import enginer
 
 
 # --- UDP socket ---
-def qfilter(rdata:dns.message.Message, addr):
-    answer = _cache.getcache(rdata)
+def qfilter(rdata:dns.message.Message, packet:bytes, addr):
+    answer = _cache.getcache(rdata, packet)
     if not answer:
         data = auth.authority(rdata)
         if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
@@ -37,16 +38,16 @@ def qfilter(rdata:dns.message.Message, addr):
     return answer
 
 
-def handle(udp:socket.socket, data, addr):
+def handle(udp:socket.socket, packet, addr):
     global _COUNT
     _COUNT +=1
     try:
-        answer = qfilter(data, addr)
+        rdata = dns.message.from_wire(packet)
+        answer = qfilter(rdata, packet, addr)
     except:
-        logging.exception('HANDLE')
-        answer = dns.message.make_response(data)
-        answer.set_rcode(2)
-    dns.query.send_udp(udp,answer,addr)
+        #logging.exception('HANDLE')
+        answer = packet
+    udp.sendto(answer,addr)
 
     try:
         #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
@@ -59,10 +60,10 @@ def udpsock(udp:socket.socket, ip, port):
         server_address = (ip, port)
         udp.bind(server_address)
         while True:
-            #data, address = udp.recvfrom(1024)
-            data,_,address = dns.query.receive_udp(udp)
+            packet, address = udp.recvfrom(1024)
+            thread = 'T-%d' % random.randint(1,1000)
             #if address[0] in ['95.165.134.11']:
-            threading.Thread(target=handle, args=(udp, data, address)).start()
+            threading.Thread(target=handle, name=thread, args=(udp, packet, address)).start()
     except KeyboardInterrupt:
         udp.close()
         sys.exit()
@@ -85,7 +86,7 @@ def start(listens):
     global _COUNT
     _COUNT = 0
     # -Counter-
-    #threading.Thread(target=counter).start()
+    threading.Thread(target=counter).start()
 
     # -MainListener for every IP-
     for ip in listens:

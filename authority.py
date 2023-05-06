@@ -15,7 +15,7 @@ class Authority:
         self.conf = conf
 
     def authority(self, rdata):
-        result, auth, data = Authority.resolve(self, rdata)
+        result, auth = Authority.resolve(self, rdata)
         answer = dns.message.make_response(rdata)
         if result or auth:
             answer.origin = rdata.question[0].name
@@ -23,7 +23,7 @@ class Authority:
             elif auth: answer = makeanswer(answer,auth, 1)                                           
             answer.flags += dns.flags.AA
         else: # <- if server didn't know about qname it will try to resolve it
-            answer = data
+            answer = dns.message.make_response(rdata)
             answer.set_rcode(3)
         return answer
 
@@ -41,7 +41,7 @@ class Authority:
                 auth = db.getDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
             if not result and not auth: # <- if not authority list and RR then check in cache
                 result = db.getCache(Q['name'], Q['class'], Q['type']) # <- Get RR from Cache Table
-            return result, auth, data
+            return result, auth
     
 def makeanswer(answer:dns.message.Message, dbresult, type = None):
     """
@@ -50,7 +50,7 @@ def makeanswer(answer:dns.message.Message, dbresult, type = None):
     """
     for obj in dbresult:
         for row in obj:
-            record = dns.rrset.from_text(row.name, row.ttl, row.dclass, row.type, row.data)
+            record = dns.rrset.from_text(str(row.name), int(row.ttl), str(row.dclass), str(row.type), str(row.data))
             if not record: break
             if type == 0:
                 answer.answer.append(record)
