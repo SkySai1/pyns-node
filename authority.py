@@ -14,22 +14,20 @@ class Authority:
         self.engine = engine
         self.conf = conf
 
-    def authority(self, packet):
-        result, auth, data = Authority.resolve(self, packet)
-        query = dns.message.from_wire(packet)
-        answer = dns.message.make_response(query)
+    def authority(self, rdata):
+        result, auth, data = Authority.resolve(self, rdata)
+        answer = dns.message.make_response(rdata)
         if result or auth:
-            answer.origin = query.question[0].name
+            answer.origin = rdata.question[0].name
             if result: answer = makeanswer(answer,result, 0)  
             elif auth: answer = makeanswer(answer,auth, 1)                                           
             answer.flags += dns.flags.AA
         else: # <- if server didn't know about qname it will try to resolve it
             answer = data
             answer.set_rcode(3)
-        return answer.to_wire(), answer
+        return answer
 
-    def resolve(self, packet):
-        data = dns.message.from_wire(packet)
+    def resolve(self, data):
         if data.question:
             rr = data.question[-1].to_text().split(' ')
             db = AccessDB(self.engine, self.conf)

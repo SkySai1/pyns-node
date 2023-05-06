@@ -1,5 +1,6 @@
 #!./dns/bin/python3
 import datetime
+import logging
 from multiprocessing import Process
 import sys
 import socket
@@ -8,6 +9,8 @@ import os
 import time
 import traceback
 import dns.rcode
+import dns.query
+import dns.message
 from sqlalchemy import create_engine
 from authority import Authority
 from caching import Caching
@@ -22,31 +25,28 @@ from accessdb import enginer
 
 
 # --- UDP socket ---
-def qfilter(querie, addr):
-    try:
-        answer = _cache.getcache(querie)
-        if not answer:
-            answer, data = auth.authority(querie)
-            if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
-                answer, data = recursive.recursive(querie)
-            if data:
-                _cache.putcache(answer, data)
-        return answer
-    except Exception as e:
-        answer = querie
-        print(traceback.format_exc())
+def qfilter(rdata:dns.message.Message, addr):
+    answer = _cache.getcache(rdata)
+    if not answer:
+        data = auth.authority(rdata)
+        if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
+            data = recursive.recursive(rdata)
+        if data:
+            _cache.putcache(data)
+            answer = data.to_wire(rdata.question[0].name)
+    return answer
 
 
-def handle(udp:socket.socket, querie, addr):
+def handle(udp:socket.socket, data, addr):
     global _COUNT
     _COUNT +=1
-    answer = qfilter(querie, addr)
-    try: 
-        udp.sendto(answer, addr)
+    try:
+        answer = qfilter(data, addr)
     except:
-        answer = DNSRecord.parse(querie)
-        answer.header.set_rcode(2)
-        udp.sendto(answer.pack(), addr)
+        logging.exception('HANDLE')
+        answer = dns.message.make_response(data)
+        answer.set_rcode(2)
+    dns.query.send_udp(udp,answer,addr)
 
     try:
         #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
@@ -59,7 +59,8 @@ def udpsock(udp:socket.socket, ip, port):
         server_address = (ip, port)
         udp.bind(server_address)
         while True:
-            data, address = udp.recvfrom(1024)
+            #data, address = udp.recvfrom(1024)
+            data,_,address = dns.query.receive_udp(udp)
             #if address[0] in ['95.165.134.11']:
             threading.Thread(target=handle, args=(udp, data, address)).start()
     except KeyboardInterrupt:
@@ -92,7 +93,7 @@ def start(listens):
         threading.Thread(target=udpsock, args=(udp, ip, port)).start()
 
     # -TechSocket-
-        threading.Thread(target=techsock).start()
+    threading.Thread(target=techsock).start()
 
 
 # --- Some Functions ---
