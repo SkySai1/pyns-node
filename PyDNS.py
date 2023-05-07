@@ -29,11 +29,12 @@ from accessdb import enginer
 def qfilter(rdata:dns.message.Message, packet:bytes, addr):
     answer = _cache.getcache(rdata, packet)
     if not answer:
-        data = auth.authority(rdata)
-        if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
-            data = recursive.recursive(rdata)
+        #data = auth.authority(rdata)
+        #if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
+        data = recursive.recursive(rdata)
         if data:
             _cache.putcache(data)
+            #threading.Thread(target=_cache.putcache, args=(data,)).start()
             answer = data.to_wire(rdata.question[0].name)
     return answer
 
@@ -47,7 +48,6 @@ def handle(udp:socket.socket, packet, addr):
     except:
         logging.exception('HANDLE')
         answer = packet
-    #print(int.from_bytes(answer[:2],'big'))
     udp.sendto(answer,addr)
 
     try:
@@ -60,6 +60,7 @@ def udpsock(udp:socket.socket, ip, port):
     try:
         server_address = (ip, port)
         udp.bind(server_address)
+        print(f'Start to listen on {ip}:{port}')
         while True:
             packet, address = udp.recvfrom(1024)
             thread = 'T-%d' % random.randint(1,1000)
