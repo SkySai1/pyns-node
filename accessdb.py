@@ -21,7 +21,8 @@ def enginer(_CONF):
     try:  
         engine = create_engine(
             f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}",
-            connect_args={'connect_timeout': 5}
+            connect_args={'connect_timeout': 5},
+            pool_pre_ping=True
         )
         checkconnect(engine)
         return engine
@@ -121,14 +122,15 @@ class AccessDB:
         #print(f'{qname} ask to Cache in DB')
         with Session(self.engine) as conn:
             if not qname and not qclass and not qtype:
-                return conn.execute(select(Cache)).fetchall()
+                result = conn.execute(select(Cache)).fetchall()
+                return result
             if qtype == 'A':
                 stmt = (select(Cache)
                     .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
                     .filter(Cache.dclass == qclass)
                     .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
                 )
-                result = conn.execute(stmt).all()
+                result = conn.execute(stmt).fetchall()
                 for obj in result:
                     for row in obj:
                         if row.type == 'CNAME':
@@ -139,7 +141,7 @@ class AccessDB:
                         .filter(Cache.dclass == qclass)
                         .filter(Cache.type == qtype)
                 )
-                result = conn.execute(stmt).all()
+                result = conn.execute(stmt).fetchall()
             return result
         
    
