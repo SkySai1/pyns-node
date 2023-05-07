@@ -1,4 +1,5 @@
 import datetime
+import logging
 import threading
 import time
 import sys
@@ -55,7 +56,6 @@ class Caching:
     def precache(self, name, rdtype, rdclass):
         db = AccessDB(self.engine, self.conf)
         dbdata = db.getCache(name, rdclass, rdtype)
-
         if dbdata:
             q = dns.message.make_query(name, rdtype, rdclass)
             r = dns.message.make_response(q)
