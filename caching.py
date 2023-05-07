@@ -36,7 +36,7 @@ class Caching:
             if not packet: packet = data.to_wire(data.question[0].name)
             _CACHE[record] = packet
             threading.Thread(target=Caching.clearcache, args=(self, record)).start()
-            #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
+            print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
 
     def clearcache(self, record):
         time.sleep(self.conf['buffertime'])
@@ -46,22 +46,25 @@ class Caching:
             packet,_ = Caching.precache(self, name, rdtype, rdclass)
             if packet:
                 _CACHE[record] = packet
-                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
+                print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
                 Caching.clearcache(self, record)
             else:
-                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
+                print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
                 del _CACHE[record]
 
     def precache(self, name, rdtype, rdclass):
         db = AccessDB(self.engine, self.conf)
         dbdata = db.getCache(name, rdclass, rdtype)
-        q = dns.message.make_query(name, rdtype, rdclass)
-        r = dns.message.make_response(q)
-        for obj in dbdata:
-            for row in obj:
-                record = dns.rrset.from_text(str(row.name), int(row.ttl), str(row.dclass), str(row.type), str(row.data))
-                r.answer.append(record)
-        return r.to_wire(q.question[0].name), r
+
+        if dbdata:
+            q = dns.message.make_query(name, rdtype, rdclass)
+            r = dns.message.make_response(q)
+            for obj in dbdata:
+                for row in obj:
+                    record = dns.rrset.from_text(str(row.name), int(row.ttl), str(row.dclass), str(row.type), str(row.data))
+                    r.answer.append(record)
+            return r.to_wire(q.question[0].name), r
+        return None, None
 
     def totalcache(self):
         db = AccessDB(self.engine, self.conf)
