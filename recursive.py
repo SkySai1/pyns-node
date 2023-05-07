@@ -121,7 +121,7 @@ class Recursive:
                 if rdata.id != result.id:
                    raise DNSError('ID mismatch!')
                 '''print(result,'\n\n')'''  # <- SOME DEBUG
-            except TimeoutError:
+            except socket.timeout:
                 continue
             except dns.exception.DNSException:
                 logging.exception(f'Resolve: #2')
