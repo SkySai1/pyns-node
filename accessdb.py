@@ -4,7 +4,7 @@ import logging
 import os
 import uuid
 import sys
-from sqlalchemy import UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_
+from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_
 from sqlalchemy.orm import declarative_base, Session
 from prettytable import PrettyTable
 
@@ -12,14 +12,16 @@ from confinit import getconf
 # --- DB structure
 Base = declarative_base()
 
-def checkconnect(engine:create_engine):
-    Base.metadata.create_all(engine)
+def checkconnect(engine:engine.base.Engine):
     engine.connect()
+    Base.metadata.create_all(engine)
+
 
 def enginer(_CONF):
     try:  
         engine = create_engine(
-            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
+            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}",
+            connect_args={'connect_timeout': 5}
         )
         checkconnect(engine)
         return engine
