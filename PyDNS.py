@@ -45,7 +45,7 @@ def handle(udp:socket.socket, packet, addr):
         rdata = dns.message.from_wire(packet)
         answer = qfilter(rdata, packet, addr)
     except:
-        #logging.exception('HANDLE')
+        logging.exception('HANDLE')
         answer = packet
     udp.sendto(answer,addr)
 
@@ -86,7 +86,7 @@ def start(listens):
     global _COUNT
     _COUNT = 0
     # -Counter-
-    threading.Thread(target=counter).start()
+    #threading.Thread(target=counter).start()
 
     # -MainListener for every IP-
     for ip in listens:
@@ -135,13 +135,13 @@ if __name__ == "__main__":
         sys.exit()
 
     # -DB Engines
-    engine1 = enginer(_CONF['init'])
-    engine2 = enginer(_CONF['init'])
+    engine1 = enginer(_CONF['init']) # < - for main work (1st subproccess)
+    engine2 = enginer(_CONF['init']) # < - for background stuff (2nd subproccess)
 
     # -Init Classes
     auth = Authority(engine1, _CONF['init'])
     recursive = Recursive(engine1, _CONF['init'])
-    _cache = Caching(_CONF['init'])
+    _cache = Caching(_CONF['init'], engine1)
     helper = Helper(engine2, _CONF['init'])
 
     # -ConfList-

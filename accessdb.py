@@ -16,6 +16,17 @@ def checkconnect(engine:create_engine):
     Base.metadata.create_all(engine)
     engine.connect()
 
+def enginer(_CONF):
+    try:  
+        engine = create_engine(
+            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
+        )
+        checkconnect(engine)
+        return engine
+    except Exception as e: 
+        print(e)
+        sys.exit()
+
 
 
 class Domains(Base):  
@@ -53,17 +64,6 @@ class Cache(Base):
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
-
-def enginer(_CONF):
-    try:  
-        engine = create_engine(
-            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}"
-        )
-        checkconnect(engine)
-        return engine
-    except Exception as e: 
-        print(e)
-        sys.exit()
 
 
 class AccessDB:

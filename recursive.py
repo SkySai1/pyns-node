@@ -67,14 +67,15 @@ class Recursive:
         try: 
             # - Caching in DB at success resolving
             if int(result.rcode()) == 0 and result.answer:
-                for rr in result.answer:
-                    rdata= str(rr[0])
-                    ttl = int(rr.ttl)
-                    if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                        rname = str(rr.name)
-                        rclass = CLASS[rr.rdclass]
-                        rtype = QTYPE[rr.rdtype]
-                        db.putC(rname, ttl, rclass, rtype, rdata)
+                for records in result.answer:
+                    for rr in records:
+                        rdata= str(rr)
+                        ttl = int(records.ttl)
+                        if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
+                            rname = str(records.name)
+                            rclass = CLASS[records.rdclass]
+                            rtype = QTYPE[records.rdtype]
+                            db.putC(rname, ttl, rclass, rtype, rdata)
             return  result# <- In anyway returns byte's packet and DNS Record data
         # -In any troubles at process resolving returns request with SERVFAIL code
         except:
