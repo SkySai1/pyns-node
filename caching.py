@@ -49,9 +49,10 @@ class Caching:
                 _CACHE[record] = packet
                 #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
                 Caching.clearcache(self, record)
-            else:
-                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
+            elif packet is None:
                 del _CACHE[record]
+                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
+
 
     def precache(self, name, rdtype, rdclass):
         db = AccessDB(self.engine, self.conf)
