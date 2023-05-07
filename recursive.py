@@ -1,5 +1,7 @@
 import ipaddress
 import socket
+import threading
+import time
 import dns.message
 import dns.rrset
 import dns.query
@@ -52,38 +54,37 @@ class Recursive:
         self.maxdepth =  30
 
     def recursive(self, query:dns.message.Message):
-        db = AccessDB(self.engine, self.conf) # <- Init Data Base
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
         udp.settimeout(2) # < - Setting timeout
         resolver = self.conf['resolver']
-
         # - External resolving if specify external DNS server
         if resolver:
             result = Recursive.extresolve(self, resolver, query, udp)
             return result, None
-        
         # - Internal resolging if it is empty
         result = Recursive.resolve(self, query, _ROOT, udp, 0)
         try: 
             # - Caching in DB at success resolving
-            if int(result.rcode()) == 0 and result.answer:
-                for records in result.answer:
-                    for rr in records:
-                        rdata= str(rr)
-                        ttl = int(records.ttl)
-                        if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                            rname = str(records.name)
-                            rclass = CLASS[records.rdclass]
-                            rtype = QTYPE[records.rdtype]
-                            db.putC(rname, ttl, rclass, rtype, rdata)
+            threading.Thread(target=Recursive.upload, args=(self, result)).start()
             return  result# <- In anyway returns byte's packet and DNS Record data
-        # -In any troubles at process resolving returns request with SERVFAIL code
-        except:
+        except: # <-In any troubles at process resolving returns request with SERVFAIL code
             logging.exception('Stage: Return answer after resolving')
             result = dns.message.make_response(query)
             result.set_rcode(2)
             return result
 
+    def upload(self, result:dns.message.Message):
+        db = AccessDB(self.engine, self.conf) # <- Init Data Base
+        if int(result.rcode()) == 0 and result.answer:
+            for records in result.answer:
+                for rr in records:
+                    rdata= str(rr)
+                    ttl = int(records.ttl)
+                    if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
+                        rname = str(records.name)
+                        rclass = CLASS[records.rdclass]
+                        rtype = QTYPE[records.rdtype]
+                        db.putC(rname, ttl, rclass, rtype, rdata)
 
     def extresolve(self, resolver, rdata, udp):
         try:
@@ -106,7 +107,7 @@ class Recursive:
                 if depth >= self.maxdepth: 
                     raise Exception(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
                 depth += 1
-                '''print(f"{depth}: {ns}")''' # <- SOME DEBUG
+                if _DEBUG == 1: print(f"{depth}: {ns}") # <- SOME DEBUG
             except:
                 result = dns.message.make_response(rdata)
                 result.set_rcode(2)
@@ -120,7 +121,7 @@ class Recursive:
                 result, ip = dns.query.receive_udp(udp,(ns, 53),1)
                 if rdata.id != result.id:
                    raise DNSError('ID mismatch!')
-                '''print(result,'\n\n')'''  # <- SOME DEBUG
+                if _DEBUG == 1: print(result,'\n\n')  # <- SOME DEBUG
             except socket.timeout:
                 continue
             except dns.exception.DNSException:
