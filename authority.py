@@ -39,8 +39,6 @@ class Authority:
             result = db.getDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
             if not result: # <- if not exists required RR type then return authority list
                 auth = db.getDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
-            if not result and not auth: # <- if not authority list and RR then check in cache
-                result = db.getCache(Q['name'], Q['class'], Q['type']) # <- Get RR from Cache Table
             return result, auth
     
 def makeanswer(answer:dns.message.Message, dbresult, type = None):
