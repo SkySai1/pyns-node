@@ -47,6 +47,7 @@ def handle(udp:socket.socket, packet, addr):
     except:
         logging.exception('HANDLE')
         answer = packet
+    #print(int.from_bytes(answer[:2],'big'))
     udp.sendto(answer,addr)
 
     try:
@@ -136,14 +137,14 @@ if __name__ == "__main__":
         sys.exit()
 
     # -DB Engines
-    engine1 = enginer(_CONF['init']) # < - for main work (1st subproccess)
-    engine2 = enginer(_CONF['init']) # < - for background stuff (2nd subproccess)
-
+    engine1 = enginer(_CONF['init']) # < - for main work
+    engine2 = enginer(_CONF['init']) # < - for caching
+    engine3 = enginer(_CONF['init']) # < - for background
     # -Init Classes
     auth = Authority(engine1, _CONF['init'])
     recursive = Recursive(engine1, _CONF['init'])
-    _cache = Caching(_CONF['init'], engine1)
-    helper = Helper(engine2, _CONF['init'])
+    _cache = Caching(_CONF['init'], engine2)
+    helper = Helper(engine3, _CONF['init'])
 
     # -ConfList-
     listens = _CONF['init']['listen-ip']
