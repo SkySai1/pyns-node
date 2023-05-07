@@ -86,7 +86,8 @@ def start(listens):
     global _COUNT
     _COUNT = 0
     # -Counter-
-    #threading.Thread(target=counter).start()
+    if _CONF['init']['printstats'] is True:
+        threading.Thread(target=counter).start()
 
     # -MainListener for every IP-
     for ip in listens:

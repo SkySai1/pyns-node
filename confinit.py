@@ -12,6 +12,7 @@ _OPTIONS =[
     'listen-ip',
     'listen-port',
     'timedelta',
+    'printstats',
     'dbuser',
     'dbpass',
     'dbhost',
@@ -36,6 +37,7 @@ def filter(config):
     config['listen-port'] = int(config['listen-port'])
     config['listen-ip'] = config['listen-ip'].split(' ')
     config['timedelta'] = int(config['timedelta'])
+    config['printstats'] = eval(config['printstats'])
     return config
 
 
@@ -59,7 +61,8 @@ def deafultconf():
         "resolver": ''
     }
     config['DEFAULT'] = {
-        "timedelta": 3
+        "timedelta": 3,
+        "printstats": False
     }
     config['DATABASE'] = {
         "dbuser": DBUser,
