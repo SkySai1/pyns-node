@@ -63,12 +63,13 @@ class Recursive:
             return result, None
         # - Internal resolging if it is empty
         result = Recursive.resolve(self, query, _ROOT, udp, 0)
-        try: 
+        try:
+            if not result: raise Exception 
             # - Caching in DB at success resolving
             threading.Thread(target=Recursive.upload, args=(self, result)).start()
             return  result# <- In anyway returns byte's packet and DNS Record data
         except: # <-In any troubles at process resolving returns request with SERVFAIL code
-            logging.exception('Stage: Return answer after resolving')
+            #logging.exception(f'Stage: Recursive: {query.question}')
             result = dns.message.make_response(query)
             result.set_rcode(2)
             return result

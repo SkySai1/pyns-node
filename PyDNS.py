@@ -60,10 +60,6 @@ class UDPserver(socketserver.BaseRequestHandler):
             pass
         except Exception as e: pass
 
-class ThreadedUDPserver(socketserver.ThreadingMixIn, socketserver.UDPServer):
-    pass
-
-
 def techsock():
     try:
         tech = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -79,7 +75,7 @@ def techsock():
         sys.exit()
 
 def newoneif(addr):
-    with ThreadedUDPserver(addr, UDPserver) as udp:
+    with socketserver.ThreadingUDPServer(addr, UDPserver) as udp:
         print(f'Start to listen on {addr}')
         udp.serve_forever(0.1)
 
