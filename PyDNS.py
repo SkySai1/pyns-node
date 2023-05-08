@@ -2,6 +2,7 @@
 import datetime
 import logging
 from multiprocessing import Process
+import socketserver
 import sys
 import socket
 import threading
@@ -26,49 +27,42 @@ from accessdb import enginer
 
 
 # --- UDP socket ---
-def qfilter(rdata:dns.message.Message, packet:bytes, addr):
-    answer = _cache.getcache(rdata, packet)
-    if not answer:
-        #data = auth.authority(rdata)
-        #if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
-        data = recursive.recursive(rdata)
-        if data:
-            _cache.putcache(data)
-            #threading.Thread(target=_cache.putcache, args=(data,)).start()
-            answer = data.to_wire(rdata.question[0].name)
-    return answer
+class UDPserver(socketserver.BaseRequestHandler):
+
+    def qfilter(rdata:dns.message.Message, packet:bytes, addr):
+        answer = _cache.getcache(rdata, packet)
+        if not answer:
+            #data = auth.authority(rdata)
+            #if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
+            data = recursive.recursive(rdata)
+            if data:
+                _cache.putcache(data)
+                #threading.Thread(target=_cache.putcache, args=(data,)).start()
+                answer = data.to_wire(rdata.question[0].name)
+        return answer
 
 
-def handle(udp:socket.socket, packet, addr):
-    global _COUNT
-    _COUNT +=1
-    try:
-        rdata = dns.message.from_wire(packet)
-        answer = qfilter(rdata, packet, addr)
-    except:
-        logging.exception('HANDLE')
-        answer = packet
-    udp.sendto(answer,addr)
+    def handle(self):
+        global _COUNT
+        _COUNT +=1
+        try:
+            packet, sock = self.request
+            rdata = dns.message.from_wire(packet)
+            answer = UDPserver.qfilter(rdata, packet, self.client_address)
+        except:
+            logging.exception('HANDLE')
+            answer = packet
+        sock.sendto(answer,self.client_address)
 
-    try:
-        #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
-        #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
-        pass
-    except Exception as e: pass
+        try:
+            #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
+            #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
+            pass
+        except Exception as e: pass
 
-def udpsock(udp:socket.socket, ip, port):
-    try:
-        server_address = (ip, port)
-        udp.bind(server_address)
-        print(f'Start to listen on {ip}:{port}')
-        while True:
-            packet, address = udp.recvfrom(1024)
-            thread = 'T-%d' % random.randint(1,1000)
-            #if address[0] in ['95.165.134.11']:
-            threading.Thread(target=handle, name=thread, args=(udp, packet, address)).start()
-    except KeyboardInterrupt:
-        udp.close()
-        sys.exit()
+class ThreadedUDPserver(socketserver.ThreadingMixIn, socketserver.UDPServer):
+    pass
+
 
 def techsock():
     try:
@@ -84,7 +78,12 @@ def techsock():
         tech.close()
         sys.exit()
 
-def start(listens):
+def newoneif(addr):
+    with ThreadedUDPserver(addr, UDPserver) as udp:
+        print(f'Start to listen on {addr}')
+        udp.serve_forever(0.1)
+
+def start(listens, port):
     global _COUNT
     _COUNT = 0
     # -Counter-
@@ -93,8 +92,7 @@ def start(listens):
 
     # -MainListener for every IP-
     for ip in listens:
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        threading.Thread(target=udpsock, args=(udp, ip, port)).start()
+        threading.Thread(target=newoneif, args=((ip, port),)).start()
 
     # -TechSocket-
     threading.Thread(target=techsock).start()
@@ -155,7 +153,7 @@ if __name__ == "__main__":
     # -Launch server
     proc = [
         {helper.watcher: []}, #Start process which make control for DB
-        {start: [listens]} #Start process with UDP listener
+        {start: [listens, port]} #Start process with UDP listener
     ]
     try:  Parallel(proc)
     except KeyboardInterrupt: pass
