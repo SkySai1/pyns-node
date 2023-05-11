@@ -1,6 +1,7 @@
 #!./dns/bin/python3
 import datetime
 import logging
+import asyncio
 from multiprocessing import Process
 import socketserver
 import sys
@@ -8,57 +9,55 @@ import socket
 import threading
 import os
 import time
-import traceback
 import dns.rcode
 import dns.query
 import dns.message
-import random
-from sqlalchemy import create_engine
 from authority import Authority
 from caching import Caching
 from recursive import Recursive
 from confinit import getconf
-from accessdb import checkconnect
 from helper import Helper
 from techincal import Tech
-from dnslib import DNSRecord
 from accessdb import enginer
 # --- Test working
 
 
 # --- UDP socket ---
-class UDPserver(socketserver.BaseRequestHandler):
+class UDPserver(asyncio.DatagramProtocol):
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        UDPserver.handle(self.transport, data, addr)
 
     def qfilter(rdata:dns.message.Message, packet:bytes, addr):
         answer = _cache.getcache(rdata, packet)
         if not answer:
-            #data = auth.authority(rdata)
-            #if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
-            data = recursive.recursive(rdata)
+            data = auth.authority(rdata)
+            if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
+                data = recursive.recursive(rdata)
             if data:
                 _cache.putcache(data)
                 #threading.Thread(target=_cache.putcache, args=(data,)).start()
                 answer = data.to_wire(rdata.question[0].name)
         return answer
-
-
-    def handle(self):
+    
+    def handle(transport:asyncio.DatagramTransport, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
         try:
-            packet, sock = self.request
-            rdata = dns.message.from_wire(packet)
-            answer = UDPserver.qfilter(rdata, packet, self.client_address)
+            rdata = dns.message.from_wire(data)
+            answer = UDPserver.qfilter(rdata, data, addr)
         except:
-            logging.exception('HANDLE')
-            answer = packet
-        sock.sendto(answer,self.client_address)
-
+            #logging.exception('HANDLE')
+            answer = data
+        transport.sendto(answer, addr)
         try:
             #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
             #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
             pass
         except Exception as e: pass
+
 
 def techsock():
     try:
@@ -75,9 +74,17 @@ def techsock():
         sys.exit()
 
 def newoneif(addr):
-    with socketserver.ThreadingUDPServer(addr, UDPserver) as udp:
-        print(f'Start to listen on {addr}')
-        udp.serve_forever(0.1)
+    print(f"Start listen to: {addr}")
+    loop = asyncio.new_event_loop()
+    listen = loop.create_datagram_endpoint(UDPserver, addr)
+    transport, protocol = loop.run_until_complete(listen)
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+
+    transport.close()
+    loop.close()
 
 def start(listens, port):
     global _COUNT

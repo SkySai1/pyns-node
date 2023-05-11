@@ -36,7 +36,7 @@ class Caching:
         if not record in _CACHE and self.conf['buffertime'] and self.conf['buffertime'] > 0:
             if not packet: packet = data.to_wire(data.question[0].name)
             _CACHE[record] = packet
-            threading.Thread(target=Caching.clearcache, args=(self, record)).start()
+            threading.Thread(target=Caching.clearcache, args=(self, record), daemon=True).start()
             #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
 
     def clearcache(self, record):
