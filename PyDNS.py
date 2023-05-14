@@ -19,9 +19,9 @@ from confinit import getconf
 from helper import Helper
 from techincal import Tech
 from accessdb import enginer
-# --- Test working
 
 
+_COUNT = 0
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
     def connection_made(self, transport):
@@ -37,8 +37,7 @@ class UDPserver(asyncio.DatagramProtocol):
             if data.rcode() == dns.rcode.NXDOMAIN and recursion is True:
                 data = recursive.recursive(rdata)
             if data:
-                _cache.putcache(data)
-                #threading.Thread(target=_cache.putcache, args=(data,)).start()
+                threading.Thread(target=_cache.putcache, args=(data,)).start()
                 answer = data.to_wire(rdata.question[0].name)
         return answer
     
@@ -49,7 +48,7 @@ class UDPserver(asyncio.DatagramProtocol):
             rdata = dns.message.from_wire(data)
             answer = UDPserver.qfilter(rdata, data, addr)
         except:
-            #logging.exception('HANDLE')
+            logging.exception('HANDLE')
             answer = data
         transport.sendto(answer, addr)
         try:
@@ -73,10 +72,11 @@ def techsock():
         tech.close()
         sys.exit()
 
-def newoneif(addr):
+def newone(ip, port):
+    addr = (ip, port)
     print(f"Start listen to: {addr}")
     loop = asyncio.new_event_loop()
-    listen = loop.create_datagram_endpoint(UDPserver, addr)
+    listen = loop.create_datagram_endpoint(UDPserver, addr, reuse_port=True)
     transport, protocol = loop.run_until_complete(listen)
     try:
         loop.run_forever()
@@ -86,31 +86,38 @@ def newoneif(addr):
     transport.close()
     loop.close()
 
-def start(listens, port):
-    global _COUNT
-    _COUNT = 0
+def launcher(p):
     # -Counter-
     if _CONF['init']['printstats'] is True:
-        threading.Thread(target=counter).start()
+        threading.Thread(target=counter, args=(p,)).start()
+
+    # -DB Engines
+    engine1 = enginer(_CONF['init']) # < - for main work
+    engine2 = enginer(_CONF['init']) # < - for caching
+
+    # -Init Classes
+    global auth
+    auth = Authority(engine1, _CONF['init'])
+
+    global recursive
+    recursive = Recursive(engine1, _CONF['init'])
+
+    global _cache
+    _cache = Caching(_CONF['init'], engine2)
 
     # -MainListener for every IP-
     for ip in listens:
-        #threading.Thread(target=newoneif, args=((ip, port),)).start()
-        for i in range(cpu_count()):
-            print(i)
-
-    # -TechSocket-
-    threading.Thread(target=techsock).start()
+        threading.Thread(target=newone, args=(ip, port)).start()
 
 
 # --- Some Functions ---
 
-def counter():
+def counter(p):
     global _COUNT
     while True:
         l1,l2,l3 = os.getloadavg()
         now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
-        print(f"{now}\t{_COUNT}\t{l1} {l2} {l3}")
+        print(f"CORE#{p}: {now}\t{_COUNT}\t{l1} {l2} {l3}")
         _COUNT = 0
         time.sleep(1)
         
@@ -141,26 +148,27 @@ if __name__ == "__main__":
         sys.exit()
 
     # -DB Engines
-    engine1 = enginer(_CONF['init']) # < - for main work
-    engine2 = enginer(_CONF['init']) # < - for caching
-    engine3 = enginer(_CONF['init']) # < - for background
+    engineH = enginer(_CONF['init']) # < - for background
+
     # -Init Classes
-    auth = Authority(engine1, _CONF['init'])
-    recursive = Recursive(engine1, _CONF['init'])
-    _cache = Caching(_CONF['init'], engine2)
-    helper = Helper(engine3, _CONF['init'])
+    helper = Helper(engineH, _CONF['init'])
 
     # -ConfList-
     listens = _CONF['init']['listen-ip']
     port = _CONF['init']['listen-port']
     recursion = _CONF['init']['recursion']
 
-    # -Launch server
-    proc = [
-        {helper.watcher: []}, #Start process which make control for DB
-        {start: [listens, port]} #Start process with UDP listener
-    ]
-    try:  Parallel(proc)
+    try: 
+        # -Start background worker
+        Process(target=helper.watcher).start()
+
+        # -Start technical socket
+        Process(target=techsock).start()
+
+        # -Start server for each core-
+        for i in range(cpu_count()):
+            Process(target=launcher, args=(i,)).start()
+
     except KeyboardInterrupt: pass
     
 
