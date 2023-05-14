@@ -189,7 +189,7 @@ if __name__ == "__main__":
         
         # -Start technical socket
         #Process(target=techsock).start()
-        techsock.start()
+        techsock()
 
 
     except KeyboardInterrupt: pass
