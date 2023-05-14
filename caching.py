@@ -40,18 +40,22 @@ class Caching:
             #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
 
     def clearcache(self, record):
-        time.sleep(self.conf['buffertime'])
         global _CACHE
-        if record in _CACHE:
-            name, rdclass, rdtype, = binascii.unhexlify(record).decode().split(' ')
-            packet,_ = Caching.precache(self, name, rdtype, rdclass)
-            if packet:
-                _CACHE[record] = packet
-                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
-                Caching.clearcache(self, record)
-            elif packet is None:
-                del _CACHE[record]
-                #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
+        try:
+            while True:
+                time.sleep(self.conf['buffertime'])
+                if record in _CACHE:
+                    name, rdclass, rdtype, = binascii.unhexlify(record).decode().split(' ')
+                    packet,_ = Caching.precache(self, name, rdtype, rdclass)
+                    if packet:
+                        _CACHE[record] = packet
+                        #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
+                    elif packet is None:
+                        del _CACHE[record]
+                        #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
+                        break
+        except:
+            del _CACHE[record]
 
 
     def precache(self, name, rdtype, rdclass):
