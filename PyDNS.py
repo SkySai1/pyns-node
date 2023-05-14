@@ -2,8 +2,8 @@
 import datetime
 import logging
 import asyncio
-from multiprocessing import Process, cpu_count
-import socketserver
+from multiprocessing import Process, cpu_count, Pipe, current_process
+import pickle
 import sys
 import socket
 import threading
@@ -86,10 +86,10 @@ def newone(ip, port):
     transport.close()
     loop.close()
 
-def launcher(p):
+def launcher(c:Pipe):
     # -Counter-
     if _CONF['init']['printstats'] is True:
-        threading.Thread(target=counter, args=(p,)).start()
+        threading.Thread(target=counter, args=(c,)).start()
 
     # -DB Engines
     engine1 = enginer(_CONF['init']) # < - for main work
@@ -112,14 +112,27 @@ def launcher(p):
 
 # --- Some Functions ---
 
-def counter(p):
-    global _COUNT
-    while True:
-        l1,l2,l3 = os.getloadavg()
-        now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
-        print(f"CORE#{p}: {now}\t{_COUNT}\t{l1} {l2} {l3}")
-        _COUNT = 0
-        time.sleep(1)
+def counter(pipe, output:bool = False):
+    if output is True:
+        while True:
+            try:
+                l1,l2,l3 = os.getloadavg()
+                now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
+                total = 0
+                for parent in pipe:
+                    data = parent.recv()
+                    print(data)
+                    total += data[1]
+                print(f'{now}\t{total}\t{l1,l2,l3}')              
+            except Exception as e: print(e)
+            time.sleep(1)
+    else:
+        global _COUNT
+        proc = current_process().name
+        while True:
+            pipe.send([proc, _COUNT])
+            _COUNT = 0
+            time.sleep(1)
         
 # Мультипроцессинг:
 def Parallel(data):
@@ -162,12 +175,22 @@ if __name__ == "__main__":
         # -Start background worker
         Process(target=helper.watcher).start()
 
-        # -Start technical socket
-        Process(target=techsock).start()
-
         # -Start server for each core-
+        Parents = []
         for i in range(cpu_count()):
-            Process(target=launcher, args=(i,)).start()
+            parent, child = Pipe()
+            name = f'#{i}'
+            Process(target=launcher, args=(child,), name=name).start()
+            Parents.append(parent)
+        
+        # -Counter-
+        if _CONF['init']['printstats'] is True:
+            threading.Thread(target=counter, args=(Parents,True)).start()
+        
+        # -Start technical socket
+        #Process(target=techsock).start()
+        techsock.start()
+
 
     except KeyboardInterrupt: pass
     
