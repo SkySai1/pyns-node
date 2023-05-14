@@ -2,7 +2,7 @@
 import datetime
 import logging
 import asyncio
-from multiprocessing import Process
+from multiprocessing import Process, cpu_count
 import socketserver
 import sys
 import socket
@@ -95,7 +95,9 @@ def start(listens, port):
 
     # -MainListener for every IP-
     for ip in listens:
-        threading.Thread(target=newoneif, args=((ip, port),)).start()
+        #threading.Thread(target=newoneif, args=((ip, port),)).start()
+        for i in range(cpu_count()):
+            print(i)
 
     # -TechSocket-
     threading.Thread(target=techsock).start()
