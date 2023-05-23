@@ -63,7 +63,7 @@ class Cache(Base):
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
-    data = Column(String(255))
+    data = Column(Text)
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
