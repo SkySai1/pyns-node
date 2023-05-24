@@ -1,5 +1,3 @@
-from functools import lru_cache
-from dnslib import DNSRecord, RR, QTYPE, CLASS
 from sqlalchemy import create_engine
 from accessdb import AccessDB
 import dns.message
@@ -10,7 +8,7 @@ import dns.name
 
 class Authority:
 
-    def __init__(self, engine:create_engine, conf, cachetime:int = 0):
+    def __init__(self, engine:create_engine, conf):
         self.engine = engine
         self.conf = conf
 
@@ -54,9 +52,4 @@ def makeanswer(answer:dns.message.Message, dbresult, type = None):
                 answer.answer.append(record)
             if type == 1:
                 answer.additional.append(record)
-            elif type == 2:
-                if answer.get_q().qtype == 1 and row.type == 'CNAME': # <- Break answer for getting addr on A question in CNAME record 
-                    answer.header.set_rcode(3) 
-                    break
-                answer.add_answer(*RR.fromZone(record))
     return answer

@@ -1,7 +1,6 @@
 import ipaddress
 import socket
 import threading
-import time
 import dns.message
 import dns.rrset
 import dns.query
@@ -10,7 +9,6 @@ import dns.rdatatype
 import dns.rdataclass
 import dns.rcode
 import logging
-from dnslib import DNSRecord, DNSError
 from accessdb import AccessDB
 
 _ROOT = [
@@ -61,7 +59,7 @@ class Recursive:
         if resolver:
             result = Recursive.extresolve(self, resolver, query, udp)
             return result, None
-        # - Internal resolging if it is empty
+        # - Internal resolving if it is empty
         result = Recursive.resolve(self, query, _ROOT, udp, 0)
         try:
             if not result: raise Exception 
@@ -119,9 +117,9 @@ class Recursive:
             try:
                 rdata.set_rcode(0)
                 dns.query.send_udp(udp, rdata, (ns, 53),1)
-                result, ip = dns.query.receive_udp(udp,(ns, 53),1)
+                result, time = dns.query.receive_udp(udp,(ns, 53),1)
                 if rdata.id != result.id:
-                   raise DNSError('ID mismatch!')
+                   raise dns.exception.DNSException('ID mismatch!')
                 if _DEBUG == 1: print(result,'\n\n')  # <- SOME DEBUG
             except socket.timeout:
                 continue
@@ -131,7 +129,7 @@ class Recursive:
 
 
             if result.answer: return result # <- If got a rdata then return it
-            elif not result or not result.authority: # <- And if there is no authority NS then domain doesnt exist
+            elif not result or not result.authority: # <- if not and there is no authority NS then domain doesnt exist
                 result.set_rcode(3) 
                 return result
             
@@ -141,19 +139,7 @@ class Recursive:
                     ip = ipaddress.ip_address(str(rr[0]))
                     if ip.version == 4:
                         NewNSlist.append(str(ip))
-            
-                
-            '''for authRR in result.auth:
-                for arRR in result.ar:
-                    if not arRR.rdata: continue
-                    try:
-                        ip = ipaddress.ip_address(str(arRR.rdata))
-                        if (str(arRR.rname).lower() in str(authRR.rdata).lower() and # <- Check for fool
-                            ip.version == 4): # <- Working only with ipv4 addresses
-                            NewNSlist.append(str(ip))
-                    except: 
-                        logging.exception("message")
-                        continue'''
+
             if not NewNSlist:
                 for rr in result.authority[0]:
                     nsQuery = dns.message.make_query(rr, dns.rdatatype.A, dns.rdataclass.IN)
