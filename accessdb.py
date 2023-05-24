@@ -118,7 +118,7 @@ class AccessDB:
 
 
     # -- Get from Cache    
-    def getCache(self, qname = None, qclass = None, qtype = None):
+    def GetFromCache(self, qname = None, qclass = None, qtype = None):
         #print(f'{qname} ask to Cache in DB')
         with Session(self.engine) as conn:
             if not qname and not qclass and not qtype:
@@ -163,7 +163,7 @@ class AccessDB:
 
 
     # -- Cache functions
-    def putC(self, rname, ttl, rclass, rtype, rdata):
+    def PutInCache(self, rname, ttl, rclass, rtype, rdata):
         #print(f"{rname} try to access in DB")
         with Session(self.engine) as conn:
             stmt = (select(Cache)

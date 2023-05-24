@@ -85,7 +85,7 @@ def printcache(short:bool = None):
         selectel(action, [MainMenu, (printcache, True), (printcache, False)])
     else:
         if short is True:
-            result = db.getCache()
+            result = db.GetFromCache()
             if result:
                 header = ['№', 'Name', 'ttl', 'type', 'data']
                 width = (os.get_terminal_size().columns - 15 - header.__len__()*2 - header.__len__()) // 2
@@ -100,7 +100,7 @@ def printcache(short:bool = None):
                         t.add_row([id.index(row.uuid)+1, row.name, row.ttl, row.type, row.data])  
             print(t,'\n')   
         if short is False:
-            result = db.getCache()
+            result = db.GetFromCache()
             if result:
                 id = []
                 for obj in result:

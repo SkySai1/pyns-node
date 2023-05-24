@@ -8,6 +8,7 @@ import dns.exception
 import dns.rdatatype
 import dns.rdataclass
 import dns.rcode
+import dns.name
 import logging
 from accessdb import AccessDB
 
@@ -49,7 +50,6 @@ class Recursive:
         self.conf = conf
         self.engine = engine
         self.state = iscache
-        self.maxdepth =  30
 
     def recursive(self, query:dns.message.Message):
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
@@ -83,7 +83,7 @@ class Recursive:
                         rname = str(records.name)
                         rclass = CLASS[records.rdclass]
                         rtype = QTYPE[records.rdtype]
-                        db.putC(rname, ttl, rclass, rtype, rdata)
+                        db.PutInCache(rname, ttl, rclass, rtype, rdata)
 
     def extresolve(self, resolver, rdata, udp):
         try:
@@ -97,14 +97,14 @@ class Recursive:
 
 
 
-    def resolve(self, rdata:dns.message.Message, nslist, udp:socket, depth):
+    def resolve(self, rdata:dns.message.QueryMessage, nslist, udp:socket, depth):
         if type(nslist) is not list:
             nslist = [nslist] # < - Create list of NameServers if it doesnt
         for ns in nslist:
             # -Checking current recursion depth-
             try:
-                if depth >= self.maxdepth: 
-                    raise Exception(f'Reach maxdetph - {self.maxdepth}!')# <- Set max recursion depth
+                if depth >= self.conf['depth']: 
+                    raise Exception("Reach maxdetph - %s!" % self.conf['depth'])# <- Set max recursion depth
                 depth += 1
                 if _DEBUG == 1: print(f"{depth}: {ns}") # <- SOME DEBUG
             except:
@@ -115,9 +115,8 @@ class Recursive:
             
                 # -Trying to get answer from authority nameserver-
             try:
-                rdata.set_rcode(0)
-                dns.query.send_udp(udp, rdata, (ns, 53),1)
-                result, time = dns.query.receive_udp(udp,(ns, 53),1)
+                result = dns.query.udp(rdata,ns,1)
+
                 if rdata.id != result.id:
                    raise dns.exception.DNSException('ID mismatch!')
                 if _DEBUG == 1: print(result,'\n\n')  # <- SOME DEBUG
@@ -142,7 +141,8 @@ class Recursive:
 
             if not NewNSlist:
                 for rr in result.authority[0]:
-                    nsQuery = dns.message.make_query(rr, dns.rdatatype.A, dns.rdataclass.IN)
+                    qname = dns.name.from_text(str(rr))
+                    nsQuery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     NSdata = Recursive.resolve(self, nsQuery, _ROOT, udp, depth)
                     try: 
                         if NSdata.rcode == dns.rcode.REFUSED:

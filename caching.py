@@ -18,7 +18,8 @@ class Caching:
     def __init__(self, conf, engine):
         self.conf = conf
         self.engine = engine
-        Caching.totalcache(self)
+        if self.conf['buffertime'] > 0:
+            Caching.totalcache(self)
 
 
     def getcache(self, data:dns.message.Message, packet:bytes):
@@ -33,7 +34,7 @@ class Caching:
     def putcache(self, data:dns.message.Message, packet:bytes = None):
         record = binascii.hexlify(data.question[0].to_text().encode())
         global _CACHE
-        if not record in _CACHE and self.conf['buffertime'] and self.conf['buffertime'] > 0:
+        if not record in _CACHE and self.conf['buffertime'] > 0:
             if not packet: packet = data.to_wire(data.question[0].name)
             _CACHE[record] = packet
             threading.Thread(target=Caching.clearcache, args=(self, record), daemon=True).start()
@@ -60,7 +61,7 @@ class Caching:
 
     def precache(self, name, rdtype, rdclass):
         db = AccessDB(self.engine, self.conf)
-        dbdata = db.getCache(name, rdclass, rdtype)
+        dbdata = db.GetFromCache(name, rdclass, rdtype)
         if dbdata:
             q = dns.message.make_query(name, rdtype, rdclass)
             r = dns.message.make_response(q)
@@ -73,7 +74,7 @@ class Caching:
 
     def totalcache(self):
         db = AccessDB(self.engine, self.conf)
-        allcache = db.getCache()
+        allcache = db.GetFromCache()
         table = []
         for obj in allcache:
             for row in obj:

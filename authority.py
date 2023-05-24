@@ -35,6 +35,8 @@ class Authority:
             Q['type'] = rr[2]
             auth = None
             result = db.getDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
+            if not result:
+                result = db.GetFromCache(Q['name'], Q['class'], Q['type'])
             if not result: # <- if not exists required RR type then return authority list
                 auth = db.getDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
             return result, auth

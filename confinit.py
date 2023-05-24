@@ -8,6 +8,7 @@ import netifaces
 _OPTIONS =[
     'resolver',
     'recursion',
+    'depth',
     'buffertime',
     'listen-ip',
     'listen-port',
@@ -33,6 +34,7 @@ def getconf(path):
 
 def filter(config):
     config['recursion'] = eval(config['recursion'])
+    config['depth'] = int(config['depth'])
     config['buffertime'] = int(config['buffertime'])
     config['listen-port'] = int(config['listen-port'])
     config['listen-ip'] = config['listen-ip'].split(' ')
@@ -58,7 +60,8 @@ def deafultconf():
     }
     config['RESOLVE'] = {
         "recursion": False,
-        "resolver": ''
+        "resolver": '',
+        "depth": 30
     }
     config['DEFAULT'] = {
         "timedelta": 3,
