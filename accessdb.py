@@ -1,14 +1,10 @@
 import datetime
-from functools import lru_cache
 import logging
-import os
 import uuid
 import sys
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_
 from sqlalchemy.orm import declarative_base, Session
-from prettytable import PrettyTable
 
-from confinit import getconf
 # --- DB structure
 Base = declarative_base()
 
@@ -117,9 +113,49 @@ class AccessDB:
             return result
 
 
-    # -- Get from Cache    
+       
+   
+    def getCNAME(conn:Session, oneof:list):
+        stmt = (
+            select(Cache)
+            .filter(Cache.name.in_(oneof))
+            .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
+        )
+        result = conn.execute(stmt).all()
+        for obj in result:
+            for row in obj:
+                if row.name == oneof[-1] and row.type == 'CNAME':
+                    oneof.append(row.data)
+                    result = AccessDB.getCNAME(conn, oneof)
+        return result
+    
+
+
+
+    # -- Cache functions
+    def PutInCache(self, rname, ttl, rclass, rtype, rdata):
+        with Session(self.engine) as conn:
+            stmt = (select(Cache)
+                    .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
+                    .filter(Cache.dclass == rclass)
+                    .filter(Cache.type == rtype)
+                    .filter(Cache.data == rdata)
+            )
+            result = conn.execute(stmt).first()
+            if not result:
+                stmt = insert(Cache).values(
+                    name = rname,
+                    ttl = ttl,
+                    dclass = rclass,
+                    type = rtype,
+                    data = rdata,
+                    cached = AccessDB.getnow(self, 0),
+                    expired = AccessDB.getnow(self, ttl)
+                )
+                conn.execute(stmt)
+                conn.commit()
+
     def GetFromCache(self, qname = None, qclass = None, qtype = None):
-        #print(f'{qname} ask to Cache in DB')
         with Session(self.engine) as conn:
             if not qname and not qclass and not qtype:
                 result = conn.execute(select(Cache)).fetchall()
@@ -143,48 +179,6 @@ class AccessDB:
                 )
                 result = conn.execute(stmt).fetchall()
             return result
-        
-   
-    def getCNAME(conn:Session, oneof:list):
-        stmt = (
-            select(Cache)
-            .filter(Cache.name.in_(oneof))
-            .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
-        )
-        result = conn.execute(stmt).all()
-        for obj in result:
-            for row in obj:
-                if row.name == oneof[-1] and row.type == 'CNAME':
-                    oneof.append(row.data)
-                    result = AccessDB.getCNAME(conn, oneof)
-        return result
-    
-
-
-
-    # -- Cache functions
-    def PutInCache(self, rname, ttl, rclass, rtype, rdata):
-        #print(f"{rname} try to access in DB")
-        with Session(self.engine) as conn:
-            stmt = (select(Cache)
-                    .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
-                    .filter(Cache.dclass == rclass)
-                    .filter(Cache.type == rtype)
-                    .filter(Cache.data == rdata)
-            )
-            result = conn.execute(stmt).first()
-            if not result:
-                stmt = insert(Cache).values(
-                    name = rname,
-                    ttl = ttl,
-                    dclass = rclass,
-                    type = rtype,
-                    data = rdata,
-                    cached = AccessDB.getnow(self, 0),
-                    expired = AccessDB.getnow(self, ttl)
-                )
-                conn.execute(stmt)
-                conn.commit()
 
     def CacheExpired(self, expired):
         with Session(self.engine) as conn:
