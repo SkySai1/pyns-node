@@ -1,4 +1,5 @@
 #!./dns/bin/python3
+import datetime
 import os
 import socket
 import sys
@@ -38,12 +39,22 @@ def zonecreator():
             break
         print('- Chooose "m" or "s" or enter empty line')
 
-    data['ttl'] = inputer("- Write to serial ttl (60 by default):\n",int, 60)
+    data['ttl'] = inputer("- Write to ttl (60 by default):\n",int, 60)
     data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
     data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
     data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
-    data['serial'] = None
-    db.ZoneCreate(data)
+    data['serial'] = int(datetime.datetime.now().strftime('%Y%m%d01'))
+    id = db.ZoneCreate(data)
+
+    rdata = f"{data['serial']} {data['refresh']} {data['retry']} {data['expire']} {data['ttl']}"
+    soa = {
+        "zone_id": id[0],
+        "name": data['name'],
+        "ttl": data['ttl'],
+        "type": 'SOA',
+        "data": rdata
+        }
+    db.NewDomains(soa)
     printzones()
 
 def inputer(text, what, default = False):
@@ -67,14 +78,14 @@ def inputer(text, what, default = False):
 def printzones():
     zlist = db.getZones()
     if zlist:
-        header = ['ID', 'Name', 'Type', 'Serial', 'TTL', 'Expire', 'Refresh', 'Retry']
+        header = ['ID', 'Name', 'Type']
         width = (os.get_terminal_size().columns - 46 - header.__len__()*2 - header.__len__())
         t = PrettyTable(header)
-        t._max_width = {'ID': 5, 'Name':width, 'Type': 7, 'Serial': 10, 'TTL': 6, 'Expire': 6, 'Refresh': 6, 'Retry': 6}
+        t._max_width = {'ID': 5, 'Name':width, 'Type': 7}
         t.align = 'l'
         for obj in zlist:
             for row in obj:
-                t.add_row([row.id, row.name, row.type, row.serial, row.ttl, row.expire, row.refresh, row.retry])
+                t.add_row([row.id, row.name, row.type])
         print(t)
     action = int(input("Choose action:\n 0. Return to back\n 1. Create new zone\n"))
     selectel(action, [MainMenu, zonecreator])
