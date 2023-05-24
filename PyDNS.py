@@ -15,7 +15,7 @@ import dns.message
 from authority import Authority
 from caching import Caching
 from recursive import Recursive
-from confinit import getconf
+from createconf import getconf
 from helper import Helper
 from techincal import Tech
 from accessdb import enginer

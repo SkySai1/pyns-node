@@ -44,12 +44,13 @@ class Zones(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True)
-    type = Column(String, default='master')  
+
+'''    type = Column(String, default='master')  
     serial = Column(Integer, default=int(datetime.datetime.now().strftime('%Y%m%d01')))
     ttl = Column(Integer, default=60)
     expire = Column(Integer, default = 86400)
     refresh = Column(Integer, default = 28800)
-    retry = Column(Integer, default=3600)
+    retry = Column(Integer, default=3600)'''
 
 class Cache(Base):  
     __tablename__ = "cache" 
@@ -191,16 +192,11 @@ class AccessDB:
             conn.commit()
 
     # -- New zone
-    def addZone(self, data):
+    def ZoneCreate(self, data):
         with Session(self.engine) as conn:
             stmt = insert(Zones).values(
                 name = data['name'],
                 type = data['type'],
-                ttl = data['ttl'],
-                serial = data['serial'],
-                expire = data['expire'],
-                refresh = data['refresh'],
-                retry = data['expire']
             ).returning(Zones)
             try:
                 result = conn.scalars(stmt)

@@ -42,7 +42,7 @@ class Transfer:
                 'expire': soa[5],
                 'ttl' : soa[6]
             }
-            result = db.addZone(data)
+            result = db.ZoneCreate(data)
             if result: 
                 zid = result[-1].id
                 data = []

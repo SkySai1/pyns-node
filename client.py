@@ -7,7 +7,7 @@ from prettytable import PrettyTable
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session
 from accessdb import AccessDB, checkconnect
-from confinit import getconf
+from createconf import getconf
 
 def commandsender(command:tuple):
     c1, c2, c3 = command
@@ -24,6 +24,7 @@ def commandsender(command:tuple):
 
 def zonecreator():
     data = {}
+    zone = {}
     data['name'] = inputer("- Write to zone name:\n",str)
     if data['name'][-1] != '.': data['name'] += '.'
 
@@ -42,7 +43,7 @@ def zonecreator():
     data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
     data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
     data['serial'] = None
-    db.addZone(data)
+    db.ZoneCreate(data)
     printzones()
 
 def inputer(text, what, default = False):
@@ -161,7 +162,7 @@ def test(one, two):
     #print(one,two)
 
 if __name__ == "__main__":
-    cpath = f"{os.path.abspath('./')}/dnspy.conf"
+    cpath = f"{os.path.abspath('./')}/config.conf"
     _CONF = {}
     _CONF['init'] = getconf(cpath)
     engine = create_engine(
