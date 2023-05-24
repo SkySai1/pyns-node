@@ -74,7 +74,7 @@ def techsock():
 
 def newone(ip, port):
     addr = (ip, port)
-    print(f"Start listen to: {addr}")
+    print(f"Core {current_process().name} Start listen to: {addr}")
     loop = asyncio.new_event_loop()
     listen = loop.create_datagram_endpoint(UDPserver, addr, reuse_port=True)
     transport, protocol = loop.run_until_complete(listen)
