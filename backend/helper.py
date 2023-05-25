@@ -2,7 +2,7 @@ import threading
 import time
 import logging
 
-from backend.accessdb import AccessDB
+from backend.accessdb import AccessDB, getnow
 
 class Helper:
 
@@ -20,8 +20,15 @@ class Helper:
     def uncache(self, db:AccessDB):
         try:
             while True:
-                db.CacheExpired(expired=db.getnow(0))
+                db.CacheExpired(expired=getnow(self.conf['timedelta'], 0))
                 time.sleep(1)
         except:
             logging.exception('Uncache:')
+
+    def unslave(self, db:AccessDB):
+        try:
+            while True:
+                pass
+        except:
+            logging.exception('Unslave')
 

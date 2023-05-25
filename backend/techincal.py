@@ -20,5 +20,5 @@ class Tech():
             zone, target = c3.split(':')
             T = Transfer(self.conf, zone,target)
             if c2 == 'get':
-                T.getaxfr()
+                T.getaxfr_old()
 

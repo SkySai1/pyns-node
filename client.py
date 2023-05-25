@@ -1,5 +1,6 @@
 #!./dns/bin/python3
 import datetime
+import logging
 import os
 import socket
 import sys
@@ -7,7 +8,9 @@ import sys
 from prettytable import PrettyTable
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session
-from accessdb import AccessDB, checkconnect
+from backend.accessdb import AccessDB, checkconnect
+from backend.transfer import Transfer
+from backend.zonemanager import Zonemaker
 from createconf import getconf
 
 def commandsender(command:tuple):
@@ -38,23 +41,30 @@ def zonecreator():
             data['type'] = 'slave'
             break
         print('- Chooose "m" or "s" or enter empty line')
+    if data['type'] == 'master':
+        data['NS'] = inputer(f"- Write to Main Name Server, ({data['name']} by default):\n",str, data['name'])
+        data['email'] = inputer("- Write to Admin's email, replase '@' by '.' (dot) like admin.google.com (dns.localhost. by default):\n",str, 'dns.localhost.')
+        data['serial'] = int(datetime.datetime.now().strftime('%Y%m%d01'))
+        data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
+        data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
+        data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
+        data['ttl'] = inputer("- Write to ttl (60 by default):\n",int, 60)
+        rdata = f"{data['NS']} {data['email']} {data['serial']} {data['refresh']} {data['retry']} {data['expire']} {data['ttl']}"
+        soa = {
+            "name": data['name'],
+            "ttl": data['ttl'],
+            "type": 'SOA',
+            "data": rdata
+            }
+        Z = Zonemaker(_CONF['init'])
+        Z.zonecreate(data, soa)
+    if data['type'] == 'slave':
+        data['master'] = inputer("- Specify IP of master:\n",str)
+        data['tsig'] = inputer("- Specify TSIG key if you need it (none by default):\n",str, None)
+        axfr = Transfer(_CONF['init'], data['name'], data['master'], data['tsig'])
+        axfr.getaxfr()
+    
 
-    data['ttl'] = inputer("- Write to ttl (60 by default):\n",int, 60)
-    data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
-    data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
-    data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
-    data['serial'] = int(datetime.datetime.now().strftime('%Y%m%d01'))
-    id = db.ZoneCreate(data)
-
-    rdata = f"{data['serial']} {data['refresh']} {data['retry']} {data['expire']} {data['ttl']}"
-    soa = {
-        "zone_id": id[0],
-        "name": data['name'],
-        "ttl": data['ttl'],
-        "type": 'SOA',
-        "data": rdata
-        }
-    db.NewDomains(soa)
     printzones()
 
 def inputer(text, what, default = False):
@@ -79,13 +89,16 @@ def printzones():
     zlist = db.getZones()
     if zlist:
         header = ['ID', 'Name', 'Type']
-        width = (os.get_terminal_size().columns - 46 - header.__len__()*2 - header.__len__())
+        width = (os.get_terminal_size().columns - 48 - header.__len__()*2 - header.__len__())
         t = PrettyTable(header)
         t._max_width = {'ID': 5, 'Name':width, 'Type': 7}
         t.align = 'l'
         for obj in zlist:
             for row in obj:
-                t.add_row([row.id, row.name, row.type])
+                try:
+                    t.add_row([row.id, row.name, row.type])
+                except:
+                    logging.exception('zone table')
         print(t)
     action = int(input("Choose action:\n 0. Return to back\n 1. Create new zone\n"))
     selectel(action, [MainMenu, zonecreator])
@@ -169,7 +182,9 @@ def selectel(action, functions):
     except KeyboardInterrupt: sys.exit()
 
 def test(one, two):
-    commandsender(('axfr','get', 'tinirog.ru:95.165.134.11'))
+    #commandsender(('axfr','get', 'araish.ru:95.165.134.11'))
+    axfr = Transfer(_CONF['init'], 'araish.ru', '95.165.134.11', None)
+    axfr.getaxfr()
     #print(one,two)
 
 if __name__ == "__main__":
@@ -180,7 +195,7 @@ if __name__ == "__main__":
         f"postgresql+psycopg2://{_CONF['init']['dbuser']}:{_CONF['init']['dbpass']}@{_CONF['init']['dbhost']}:{_CONF['init']['dbport']}/{_CONF['init']['dbname']}"
     )
     try: 
-        checkconnect(engine)
+        checkconnect(engine, _CONF['init'])
     except: 
         print('Filed with DB connection')
         sys.exit()
@@ -188,6 +203,6 @@ if __name__ == "__main__":
     Base = declarative_base()
     Base.metadata.create_all(engine)
 
-    db = AccessDB(engine, _CONF)
+    db = AccessDB(engine, _CONF['init'])
     try: MainMenu()
     except KeyboardInterrupt: sys.exit()

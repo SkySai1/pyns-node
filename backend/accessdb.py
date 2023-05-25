@@ -2,15 +2,26 @@ import datetime
 import logging
 import uuid
 import sys
-from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_
-from sqlalchemy.orm import declarative_base, Session
+import psycopg2
+from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_, update
+from sqlalchemy.orm import declarative_base, Session, relationship
+from backend.rulesmaker import makerules
+
 
 # --- DB structure
 Base = declarative_base()
 
-def checkconnect(engine:engine.base.Engine):
+def checkconnect(engine:engine.base.Engine, conf):
     engine.connect()
     Base.metadata.create_all(engine)
+    data = makerules()
+    db = AccessDB(engine, conf)
+    try:
+        db.NewRules(data)
+    except psycopg2.errors.UniqueViolation:
+        print('ha')
+
+
 
 
 def enginer(_CONF):
@@ -20,7 +31,7 @@ def enginer(_CONF):
             connect_args={'connect_timeout': 5},
             pool_pre_ping=True
         )
-        checkconnect(engine)
+        checkconnect(engine, _CONF)
         return engine
     except Exception as e: 
         print(e)
@@ -45,9 +56,8 @@ class Zones(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True)
     type = Column(String, default='master')
-    refresh = Column(DateTime(timezone=True), default=None)
-    retry = Column(DateTime(timezone=True), default=None)
-    expire = Column(DateTime(timezone=True), default=None)
+
+    rules = relationship("Rules", secondary="zones_rules", back_populates="zones", cascade='delete')
 
 class Cache(Base):  
     __tablename__ = "cache" 
@@ -62,6 +72,20 @@ class Cache(Base):
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
 
+class Rules(Base):
+    __tablename__ = "rules"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), unique=True, nullable=False)
+    iszone = Column(Boolean, default=False)
+
+    zones = relationship("Zones", secondary="zones_rules", back_populates="rules", cascade='delete', single_parent=True)
+
+class Join_ZonesRules(Base):
+    __tablename__ = "zones_rules"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zone_id = Column(Integer, ForeignKey('zones.id'))
+    rule_id = Column(Integer, ForeignKey('rules.id'))
+    value = Column(Text, nullable=False)
 
 class AccessDB:
 
@@ -188,22 +212,30 @@ class AccessDB:
             result = conn.scalars(stmt).all()
             conn.commit()
 
-    # -- New zone
+    # -- Zones
     def ZoneCreate(self, data):
         with Session(self.engine) as conn:
             stmt = insert(Zones).values(
-                name = data['name'],
-                type = data['type']
-            ).returning(Zones.id)
+                    name = data['name'],
+                    type = data['type'],
+                ).returning(Zones.id)                
             try:
-                result = conn.scalars(stmt)
+                result = conn.scalars(stmt).one()
                 conn.commit()
-                return result.all()
+                return result
             except Exception as e:
-                print(e)
+                #logging.exception('Zone Create')
                 return False
 
-    # -- New domain
+    def ZoneExpired(self, now):
+        with Session(self.engine) as conn:
+            stmt = (conn.query(Zones, Rules)
+                    .join(Join_ZonesRules)
+                    .filter(Join_ZonesRules.zone_id)
+            )
+
+
+    # -- Domains
     def addDomain(self, d, qtype, rdata):
         with Session(self.engine) as conn:
             stmt = insert(Domains).values(
@@ -224,11 +256,76 @@ class AccessDB:
             except:
                 logging.exception('NewDomains')
 
-    def getnow(self, rise):
-        offset = datetime.timedelta(hours=self.conf['timedelta'])
-        tz = datetime.timezone(offset)
-        now = datetime.datetime.now(tz=tz)
-        return now + datetime.timedelta(0,rise) 
+    # -- Rules
+    def NewRules(self, data:list):
+        with Session(self.engine) as conn:
+            try:
+                for row in data:
+                    check = conn.execute(
+                        select(Rules)
+                        .filter(Rules.name == row['name'])
+                    ).first()
+                    if check:
+                        stmt = (
+                            update(Rules)
+                            .filter(Rules.name == row['name'])
+                            .values(
+                                name = row['name'],
+                                iszone = row['iszone']
+                            )
+                        )
+                    else:
+                        stmt = (
+                            insert(Rules)
+                            .values(
+                                name = row['name'],
+                                iszone = row['iszone']
+                            )                                
+                        )
+                    conn.execute(stmt)
+                conn.commit()
+            except:
+                logging.exception('NewRules')
+    
+    def NewZoneRules(self, zoneid, data:list):
+        with Session(self.engine) as conn:
+            for name in data:
+                try:
+                    stmt_ruleid = (select(Rules.id)
+                                   .filter(Rules.name == name)
+                                   .filter(Rules.iszone == True)
+                    )
+                    ruleid = conn.execute(stmt_ruleid).fetchone()
+                    if not ruleid: return False
+                    ruleid = ruleid[0]
+                    check = (select(Join_ZonesRules.id)
+                            .filter(Join_ZonesRules.rule_id == ruleid)
+                            .filter(Join_ZonesRules.zone_id == zoneid)
+                    )
+                    if conn.execute(check).first(): return False
+
+                    stmt = (insert(Join_ZonesRules)
+                            .values(
+                                zone_id = zoneid,
+                                rule_id = ruleid,
+                                value = data[name]
+                            )
+                    )
+                    conn.execute(stmt)
+                    conn.commit()
+                except:
+                    #logging.exception('New Zone-Rules')
+                    return False
+            return True
+
+
+
+
+def getnow(delta, rise):
+    offset = datetime.timedelta(hours=delta)
+    tz = datetime.timezone(offset)
+    now = datetime.datetime.now(tz=tz)
+    return now + datetime.timedelta(0,rise) 
 
 # --- Direct Access to file ---
 
