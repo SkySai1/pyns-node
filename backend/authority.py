@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from accessdb import AccessDB
+from backend.accessdb import AccessDB
 import dns.message
 import dns.rrset
 import dns.flags

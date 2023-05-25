@@ -1,6 +1,6 @@
 
 import logging
-from transfer import Transfer
+from backend.transfer import Transfer
 
 
 class Tech():

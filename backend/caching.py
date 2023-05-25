@@ -7,9 +7,9 @@ import dns.message
 import dns.rrset
 import hashlib
 import binascii
-from recursive import QTYPE, CLASS
+from backend.recursive import QTYPE, CLASS
 from functools import lru_cache
-from accessdb import AccessDB
+from backend.accessdb import AccessDB
 
 _CACHE = {}
 # --- Cahe job ---

@@ -10,7 +10,7 @@ import dns.rdataclass
 import dns.rcode
 import dns.name
 import logging
-from accessdb import AccessDB
+from backend.accessdb import AccessDB
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.

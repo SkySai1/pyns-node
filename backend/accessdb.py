@@ -209,7 +209,7 @@ class AccessDB:
             stmt = insert(Domains).values(
                 name = d,
                 type = qtype,
-                data = rdata
+                data = rdata,
             )
             conn.execute(stmt)
             conn.commit()

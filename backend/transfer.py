@@ -8,7 +8,7 @@ import dns.rdata
 import dns.tsigkeyring
 from dnslib import CLASS, QTYPE
 #from PyDNS import create_engine
-from accessdb import AccessDB, enginer
+from backend.accessdb import AccessDB, enginer
 
 class Transfer:
     def __init__(self, conf, zone, target):
