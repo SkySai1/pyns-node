@@ -12,13 +12,13 @@ import time
 import dns.rcode
 import dns.query
 import dns.message
-from authority import Authority
-from caching import Caching
-from recursive import Recursive
+from backend.authority import Authority
+from backend.caching import Caching
+from backend.recursive import Recursive
 from createconf import getconf
-from helper import Helper
-from techincal import Tech
-from accessdb import enginer
+from backend.helper import Helper
+from backend.techincal import Tech
+from backend.accessdb import enginer
 
 
 _COUNT = 0
