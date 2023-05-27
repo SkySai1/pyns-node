@@ -171,8 +171,8 @@ class AccessDB:
                     dclass = rclass,
                     type = rtype,
                     data = rdata,
-                    cached = AccessDB.getnow(self, 0),
-                    expired = AccessDB.getnow(self, ttl)
+                    cached = getnow(self.conf['timedelta'], 0),
+                    expired = getnow(self.conf['timedelta'], ttl)
                 )
                 conn.execute(stmt)
                 conn.commit()
