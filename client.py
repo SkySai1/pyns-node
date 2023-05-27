@@ -57,7 +57,7 @@ def zonecreator():
             "data": rdata
             }
         Z = Zonemaker(_CONF['init'])
-        Z.zonecreate(data, soa)
+        Z.zonecreate(data)
     if data['type'] == 'slave':
         data['master'] = inputer("- Specify IP of master:\n",str)
         data['tsig'] = inputer("- Specify TSIG key if you need it (none by default):\n",str, None)

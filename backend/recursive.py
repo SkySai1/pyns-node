@@ -110,7 +110,7 @@ class Recursive:
             except:
                 result = dns.message.make_response(rdata)
                 result.set_rcode(2)
-                logging.exception(f'Resolve: #1, qname - {result.question[0].name}')
+                #logging.exception(f'Resolve: #1, qname - {result.question[0].name}')
                 return result
             
                 # -Trying to get answer from authority nameserver-
@@ -120,7 +120,7 @@ class Recursive:
                 if rdata.id != result.id:
                    raise dns.exception.DNSException('ID mismatch!')
                 if _DEBUG == 1: print(result,'\n\n')  # <- SOME DEBUG
-            except socket.timeout:
+            except dns.exception.Timeout:
                 continue
             except dns.exception.DNSException:
                 logging.exception(f'Resolve: #2')
