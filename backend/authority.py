@@ -23,22 +23,23 @@ class Authority:
         else: # <- if server didn't know about qname it will try to resolve it
             answer = dns.message.make_response(rdata)
             answer.set_rcode(3)
+            print(rdata.question[0].name, 'Oops')
         return answer
 
-    def resolve(self, data):
+    def resolve(self, data:dns.message.Message):
         if data.question:
             rr = data.question[-1].to_text().split(' ')
             db = AccessDB(self.engine, self.conf)
             Q = {}
-            Q['name'] = rr[0]
-            Q['class'] = rr[1]
-            Q['type'] = rr[2]
+            Q['name'] = rr[0].lower()
+            Q['class'] = rr[1].upper()
+            Q['type'] = rr[2].upper()
             auth = None
-            result = db.getDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
+            result = db.GetDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
             if not result:
                 result = db.GetFromCache(Q['name'], Q['class'], Q['type'])
             if not result: # <- if not exists required RR type then return authority list
-                auth = db.getDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
+                auth = db.GetDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
             return result, auth
     
 def makeanswer(answer:dns.message.Message, dbresult, type = None):

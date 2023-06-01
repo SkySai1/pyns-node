@@ -110,16 +110,15 @@ class AccessDB:
                 return None
 
     # -- Get from Domains
-    def getDomain(self, qname, qclass, qtype = None):
-        if type(qtype) is not list: qtype = [qtype]
+    def GetDomain(self, qname, qclass, qtype = None):
+        #if type(qtype) is not list: qtype = [qtype]
         with Session(self.engine) as conn:
             stmt = (select(Zones)
                     .filter(Zones.name.in_(qname.split('.')))
 
             )
             result = conn.execute(stmt).fetchall()
-            for obj in result:
-                print(obj)
+            #for obj in result: print(obj)
             if not qtype:
                 stmt = (select(Domains)
                         .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
@@ -129,7 +128,7 @@ class AccessDB:
                 stmt = (select(Domains)
                     .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
                     .filter(Domains.dclass == qclass)
-                    .filter(Domains.type.in_(qtype))
+                    .filter(Domains.type == qtype)
                 )
             result = conn.execute(stmt).all()
             return result

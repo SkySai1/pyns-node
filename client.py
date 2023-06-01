@@ -48,7 +48,7 @@ def zonecreator():
         data['refresh'] = inputer("- Write to refresh time (28800 by default):\n", int, 28800)
         data['retry'] = inputer("- Write to expire time (3600 by default):\n", int, 3600)
         data['expire'] = inputer("- Write to expire time (86400 by default):\n", int, 86400)
-        data['ttl'] = inputer("- Write to ttl (60 by default):\n",int, 60)
+        data['ttl'] = inputer("- Write to ttl (3600 by default):\n",int, 60)
         rdata = f"{data['NS']} {data['email']} {data['serial']} {data['refresh']} {data['retry']} {data['expire']} {data['ttl']}"
         soa = {
             "name": data['name'],
@@ -57,7 +57,25 @@ def zonecreator():
             "data": rdata
             }
         Z = Zonemaker(_CONF['init'])
-        Z.zonecreate(data)
+        id = Z.zonecreate(data)
+        rdata = ' '.join([
+            data['NS'], 
+            data['email'], 
+            str(data['serial']), 
+            str(data['refresh']),
+            str(data['retry']),
+            str(data['expire']),
+            str(data['ttl'])
+             ])
+        soa = {
+            "zone_id": id,
+            "name": data['name'],
+            "ttl": data['ttl'],
+            "dclass": 'IN',
+            "type": 'SOA',
+            "data": rdata
+        }
+        Z.zonefilling(soa)
     if data['type'] == 'slave':
         data['master'] = inputer("- Specify IP of master:\n",str)
         data['tsig'] = inputer("- Specify TSIG key if you need it (none by default):\n",str, None)
