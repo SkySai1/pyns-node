@@ -23,7 +23,6 @@ class Authority:
         else: # <- if server didn't know about qname it will try to resolve it
             answer = dns.message.make_response(rdata)
             answer.set_rcode(3)
-            print(rdata.question[0].name, 'Oops')
         return answer
 
     def resolve(self, data:dns.message.Message):
