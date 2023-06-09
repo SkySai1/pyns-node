@@ -18,7 +18,9 @@ _OPTIONS =[
     'dbpass',
     'dbhost',
     'dbport',
-    'dbname'
+    'dbname',
+    'timeout',
+    'retry'
 ]
 
 def getconf(path):
@@ -40,6 +42,8 @@ def filter(config):
     config['listen-ip'] = config['listen-ip'].split(' ')
     config['timedelta'] = int(config['timedelta'])
     config['printstats'] = eval(config['printstats'])
+    config['timeout'] = float(config['timeout'])
+    config['retry'] = int(config['retry'])
     return config
 
 
@@ -63,7 +67,9 @@ def deafultconf():
     config['RESOLVE'] = {
         "recursion": False,
         "resolver": '',
-        "depth": 30
+        "depth": 30,
+        "retry": 3,
+        "timeout": 0.1
     }
 
     config['DEFAULT'] = {
