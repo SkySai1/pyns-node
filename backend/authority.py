@@ -8,21 +8,20 @@ import dns.name
 
 class Authority:
 
-    def __init__(self, engine:create_engine, conf):
-        self.engine = engine
+    def __init__(self, conf):
         self.conf = conf
 
-    def authority(self, rdata):
-        result, auth = Authority.resolve(self, rdata)
+    def authority(self, rdata):    
+        '''        result, auth = Authority.resolve(self, rdata)
         answer = dns.message.make_response(rdata)
         if result or auth:
             answer.origin = rdata.question[0].name
             if result: answer = makeanswer(answer,result, 0)  
             elif auth: answer = makeanswer(answer,auth, 1)                                           
             answer.flags += dns.flags.AA
-        else: # <- if server didn't know about qname it will try to resolve it
-            answer = dns.message.make_response(rdata)
-            answer.set_rcode(3)
+        else: # <- if server didn't know about qname it will try to resolve it'''
+        answer = dns.message.make_response(rdata)
+        answer.set_rcode(3)
         return answer
 
     def resolve(self, data:dns.message.Message):

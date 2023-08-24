@@ -1,4 +1,4 @@
-#!./dns/bin/python3
+#!/home/dnspy/server/dns/bin/python3
 import datetime
 import logging
 import os
@@ -11,7 +11,7 @@ from sqlalchemy.orm import declarative_base, Session
 from backend.accessdb import AccessDB, checkconnect
 from backend.transfer import Transfer
 from backend.zonemanager import Zonemaker
-from createconf import getconf
+from initconf import getconf
 
 def commandsender(command:tuple):
     c1, c2, c3 = command

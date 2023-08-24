@@ -15,10 +15,11 @@ _CACHE = {}
 # --- Cahe job ---
 class Caching:
 
-    def __init__(self, conf, engine):
-        self.conf = conf
+    def __init__(self, engine, _CONF):
+        self.conf = _CONF
         self.engine = engine
-        if self.conf['buffertime'] > 0:
+        self.refresh = int(_CONF['CACHING']['refresh'])
+        if self.refresh > 0:
             Caching.totalcache(self)
 
 
@@ -34,7 +35,7 @@ class Caching:
     def putcache(self, data:dns.message.Message, packet:bytes = None):
         record = binascii.hexlify(data.question[0].to_text().encode())
         global _CACHE
-        if not record in _CACHE and self.conf['buffertime'] > 0:
+        if not record in _CACHE and self.refresh > 0:
             if not packet: packet = data.to_wire(data.question[0].name)
             _CACHE[record] = packet
             threading.Thread(target=Caching.clearcache, args=(self, record), daemon=True).start()
@@ -44,7 +45,7 @@ class Caching:
         global _CACHE
         try:
             while True:
-                time.sleep(self.conf['buffertime'])
+                time.sleep(self.refresh)
                 if record in _CACHE:
                     name, rdclass, rdtype, = binascii.unhexlify(record).decode().split(' ')
                     packet,_ = Caching.precache(self, name, rdtype, rdclass)

@@ -6,9 +6,10 @@ from backend.accessdb import AccessDB, getnow
 
 class Helper:
 
-    def __init__(self, engine, conf) -> None:
+    def __init__(self, engine, _CONF) -> None:
         self.engine = engine
-        self.conf = conf
+        self.conf = _CONF
+        self.timedelta = int(_CONF['DATABASE']['timedelta'])
 
     def watcher(self):
         db = AccessDB(self.engine, self.conf)
@@ -20,7 +21,7 @@ class Helper:
     def uncache(self, db:AccessDB):
         try:
             while True:
-                db.CacheExpired(expired=getnow(self.conf['timedelta'], 0))
+                db.CacheExpired(expired=getnow(self.timedelta, 0))
                 time.sleep(1)
         except:
             logging.exception('Uncache:')

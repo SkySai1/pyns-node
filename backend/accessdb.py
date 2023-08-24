@@ -27,14 +27,14 @@ def checkconnect(engine:engine.base.Engine, conf):
 def enginer(_CONF):
     try:  
         engine = create_engine(
-            f"postgresql+psycopg2://{_CONF['dbuser']}:{_CONF['dbpass']}@{_CONF['dbhost']}:{_CONF['dbport']}/{_CONF['dbname']}",
+            f"postgresql+psycopg2://{_CONF['DATABASE']['dbuser']}:{_CONF['DATABASE']['dbpass']}@{_CONF['DATABASE']['dbhost']}:{int(_CONF['DATABASE']['dbport'])}/{_CONF['DATABASE']['dbname']}",
             connect_args={'connect_timeout': 5},
             pool_pre_ping=True
         )
         checkconnect(engine, _CONF)
         return engine
     except Exception as e: 
-        print(e)
+        logging.exception('ERROR with engine init')
         sys.exit()
 
 
@@ -89,9 +89,10 @@ class Join_ZonesRules(Base):
 
 class AccessDB:
 
-    def __init__(self, engine, conf):
+    def __init__(self, engine, _CONF):
         self.engine = engine
-        self.conf = conf
+        self.conf = _CONF
+        self.timedelta = int(_CONF['DATABASE']['timedelta'])
 
 
     # -- Get from Zones
@@ -170,8 +171,8 @@ class AccessDB:
                     dclass = rclass,
                     type = rtype,
                     data = rdata,
-                    cached = getnow(self.conf['timedelta'], 0),
-                    expired = getnow(self.conf['timedelta'], ttl)
+                    cached = getnow(self.timedelta, 0),
+                    expired = getnow(self.timedelta, ttl)
                 )
                 conn.execute(stmt)
                 conn.commit()

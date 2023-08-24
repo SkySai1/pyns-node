@@ -1,3 +1,4 @@
+#!/home/dnspy/server/dns/bin/python3
 import ipaddress
 import random
 import socket
@@ -48,19 +49,22 @@ CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Recursive:
 
-    def __init__(self, engine, conf, iscache = True):
-        self.conf = conf
-        self.engine = engine
-        self.state = iscache
-        self.depth = conf['depth']
-        self.timeout = conf['timeout']
-        self.retry = conf['retry']
+    def __init__(self, engine, _CONF, iscache = True):
+        try:
+            self.conf = _CONF
+            self.engine = engine
+            self.state = iscache
+            self.depth = int(_CONF['RECURSION']['maxdepth'])
+            self.timeout = float(_CONF['RECURSION']['timeout'])
+            self.retry = int(_CONF['RECURSION']['retry'])
+            self.resolver = _CONF['RECURSION']['resolver']
+        except:
+            logging.exception('ERROR with recursive init')
 
     def recursive(self, query:dns.message.Message):
-        resolver = self.conf['resolver']
         # - External resolving if specify external DNS server
-        if resolver:
-            result = Recursive.extresolve(self, resolver, query)
+        if self.resolver:
+            result = Recursive.extresolve(self, self.resolver, query)
             return result, None
         else:
             # - Internal resolving if it is empty

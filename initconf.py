@@ -1,4 +1,4 @@
-#!./dns/bin/python3
+#!/home/dnspy/server/dns/bin/python3
 import os
 import configparser
 import sys
@@ -52,6 +52,8 @@ def deafultconf():
     }
     config['RECURSION'] = {
         'enable': False,
+        ";specify another recursion DNS server": None,
+        'resolver': '',
         'white-list': False,
         'black-list': False,
         'maxdepth': 30,
