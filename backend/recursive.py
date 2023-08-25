@@ -31,7 +31,7 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
-_DEBUG = 3
+_DEBUG = 1
 
 QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
         15:'MX', 16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY',
@@ -70,8 +70,10 @@ class Recursive:
             # - Internal resolving if it is empty
             try:
                 random.shuffle(_ROOT)
+                global depth
+                depth = 0
                 for i in range(3):
-                    result,_ = Recursive.resolve(self, query, _ROOT[i], 0)
+                    result,_ = Recursive.resolve(self, query, _ROOT[i])
                     if dns.flags.AA in result.flags: break
                     if result and dns.flags.AA in result.flags: break
                 if not result: raise Exception 
@@ -79,7 +81,7 @@ class Recursive:
                 #threading.Thread(target=Recursive.upload, args=(self, result)).start()
                 return  result# <- In anyway returns byte's packet and DNS Record data
             except: # <-In any troubles at process resolving returns request with SERVFAIL code
-                #logging.exception(f'Stage: Recursive: {query.question}')
+                logging.exception(f'Stage: Recursive: {query.question}')
                 result = dns.message.make_response(query)
                 result.set_rcode(2)
                 return result
@@ -97,12 +99,14 @@ class Recursive:
                         rtype = QTYPE[records.rdtype]
                         db.PutInCache(rname, ttl, rclass, rtype, rdata)
 
-    def resolve(self, query:dns.message.QueryMessage, ns, depth):
+    def resolve(self, query:dns.message.QueryMessage, ns):
         # -Checking current recursion depth-
         try:
+            global depth
+            depth += 1
             if depth >= self.depth:
                 raise Exception("Reach maxdetph - %s!" % self.depth)# <- Set max recursion depth
-            depth += 1
+            
             if _DEBUG in [1,3]: print(f"{depth}: {ns}") # <- SOME DEBUG
         except:
             result = dns.message.make_response(query)
@@ -113,16 +117,17 @@ class Recursive:
         # -Trying to get answer from specifing nameserver-
         try:
             for i in range(self.retry):
-                print('hhh')
                 try:
                     result = dns.query.udp(query, ns, self.timeout)
                     break
                 except dns.exception.Timeout as e:
+                    result = None
                     pass
             if _DEBUG in [2,3]: print(result,'\n\n')  # <- SOME DEBUG
+            if not result: 
+                return None, ns
             if query.id != result.id:
                 raise Exception('ID mismatch!')
-            if not result: raise Exception
         except Exception:
             logging.exception(f'Resolve: #2, qname - {result.question[0].name}')
             result = dns.message.make_response(query)
@@ -137,7 +142,7 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if ipaddress.ip_address(ns).version == 4:
-                    result, ns = Recursive.resolve(self,query, ns, depth)
+                    result, ns = Recursive.resolve(self,query, ns)
                     if result and result.rcode() in [
                         dns.rcode.NOERROR]: return result, ns
             return None, ns
@@ -148,7 +153,7 @@ class Recursive:
                     qname = dns.name.from_text(str(rr))
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
-                        nsdata, _ = Recursive.resolve(self, nsquery, ns, depth)
+                        nsdata, _ = Recursive.resolve(self, nsquery, ns)
                         if nsdata.rcode() is dns.rcode.REFUSED: break
                         if not dns.rcode.NOERROR == nsdata.rcode():
                             continue
@@ -156,7 +161,7 @@ class Recursive:
                             for rr in nsdata.answer:
                                 ns = str(rr[0])
                                 if ipaddress.ip_address(ns).version == 4:
-                                    result, ns = Recursive.resolve(self, query, ns, depth)
+                                    result, ns = Recursive.resolve(self, query, ns)
                                 if result and result.rcode() in [
                                     dns.rcode.NOERROR]: return result, ns
                             return None, ns

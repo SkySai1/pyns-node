@@ -49,13 +49,16 @@ class UDPserver(asyncio.DatagramProtocol):
             print(UDPserver.railway(self, request, addr[0]))
             if UDPserver.railway(self, request, addr[0]) is True:
                 answer = _cache.getcache(request, data)
+                print(type(answer))
                 if not answer:
                     data = _auth.authority(request)
                     if data.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
                         data = _recursive.recursive(request)
-                    if data:
-                       threading.Thread(target=_cache.putcache, args=(data,)).start()
+                    if data and type(data) is dns.message.QueryMessage:
+                       #threading.Thread(target=_cache.putcache, args=(data,)).start()
                        answer = data
+                    else:
+                        raise Exception
             else:
                 answer = dns.message.make_response(request)
                 answer.set_rcode(5)
