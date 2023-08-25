@@ -5,6 +5,7 @@ import logging
 import asyncio
 from multiprocessing import Process, cpu_count, Pipe, current_process
 import pickle
+import re
 import sys
 import socket
 import threading
@@ -33,27 +34,40 @@ class UDPserver(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         UDPserver.handle(self, data, addr)
 
-    def qfilter(self, rdata:dns.message.Message, packet:bytes, addr):
-        answer = _cache.getcache(rdata, packet)
-        if not answer:
-            data = _auth.authority(rdata)
-            if data.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
-                data = _recursive.recursive(rdata)
-            if data:
-                threading.Thread(target=_cache.putcache, args=(data,)).start()
-                answer = data.to_wire(rdata.question[0].name)
-        return answer
+    def railway(self, request:dns.message.Message, ip):
+        try:
+            return True
+        except:
+            logging.exception('SECURITY CHECK')
+            return False         
     
     def handle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
         try:
-            rdata = dns.message.from_wire(data)
-            answer = UDPserver.qfilter(self, rdata, data, addr)
+            request = dns.message.from_wire(data)
+            print(UDPserver.railway(self, request, addr[0]))
+            if UDPserver.railway(self, request, addr[0]) is True:
+                answer = _cache.getcache(request, data)
+                if not answer:
+                    data = _auth.authority(request)
+                    if data.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
+                        data = _recursive.recursive(request)
+                    if data:
+                       threading.Thread(target=_cache.putcache, args=(data,)).start()
+                       answer = data
+            else:
+                answer = dns.message.make_response(request)
+                answer.set_rcode(5)
         except:
-            logging.exception('HANDLE')
-            answer = data
-        self.transport.sendto(answer, addr)
+            logging.exception('UDP HANDLE')
+            request = dns.message.from_wire(data)
+            answer = dns.message.make_response(request)
+            answer.set_rcode(2)
+        finally:
+            pack = answer.to_wire(request.question[0].name)
+            
+        self.transport.sendto(pack, addr)
         try:
             #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
             #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
