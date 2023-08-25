@@ -9,7 +9,7 @@ _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats'],
     'AUTHORITY': [],
     'CACHING': ['refresh'],
-    'RECURSION': ['enable', 'white-list', 'black-list', 'maxdepth', 'timeout', 'retry'],
+    'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname', 'timedelta'],
 }
 
@@ -54,8 +54,6 @@ def deafultconf():
         'enable': False,
         ";specify another recursion DNS server": None,
         'resolver': '',
-        'white-list': False,
-        'black-list': False,
         'maxdepth': 30,
         'timeout': 0.5,
         'retry': 1
