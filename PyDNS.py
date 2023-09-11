@@ -32,8 +32,7 @@ class UDPserver(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        #UDPserver.handle(self, data, addr)
-        UDPserver.thandle(self, data, addr)
+        UDPserver.handle(self, data, addr)
 
     def railway(self, request:dns.message.Message, ip):
         try:
@@ -45,14 +44,15 @@ class UDPserver(asyncio.DatagramProtocol):
     def thandle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
-        request = dns.message.from_wire(data)        
+        request = dns.message.from_wire(data)
+        result = _cache.get(request, data[:2])
         self.transport.sendto(data, addr)
 
 
     def handle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
-        self.transport.sendto(data, addr)
+
         try:
             request = dns.message.from_wire(data)
             if UDPserver.railway(self, request, addr[0]) is True:
