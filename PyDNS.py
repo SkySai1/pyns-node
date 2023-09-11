@@ -3,7 +3,7 @@ import datetime
 import ipaddress
 import logging
 import asyncio
-from multiprocessing import Process, cpu_count, Pipe, current_process
+from multiprocessing import Process, cpu_count, Pipe, current_process, Manager
 import pickle
 import re
 import sys
@@ -32,7 +32,8 @@ class UDPserver(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        UDPserver.handle(self, data, addr)
+        #UDPserver.handle(self, data, addr)
+        UDPserver.thandle(self, data, addr)
 
     def railway(self, request:dns.message.Message, ip):
         try:
@@ -41,34 +42,45 @@ class UDPserver(asyncio.DatagramProtocol):
             logging.exception('SECURITY CHECK')
             return False         
     
+    def thandle(self, data:bytes, addr:tuple):
+        global _COUNT
+        _COUNT +=1
+        request = dns.message.from_wire(data)        
+        self.transport.sendto(data, addr)
+
+
     def handle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
+        self.transport.sendto(data, addr)
         try:
             request = dns.message.from_wire(data)
             if UDPserver.railway(self, request, addr[0]) is True:
-                result = _cache.getcache(request, data)
-                if not result:
-                    result = _auth.authority(request)
-                    if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
-                        result = _recursive.recursive(request)
+                result = _cache.get(request, data[:2])
+                if result:
+                    pack = result
+                else:
+                    '''result = _auth.authority(request)'''
+                    '''if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:'''
+                    result = _recursive.recursive(request)
                     if result and type(result) is dns.message.QueryMessage:
-                       #threading.Thread(target=_cache.putcache, args=(data,)).start()
+                       threading.Thread(target=_cache.put, args=(result,)).start()
+                       pack = result.to_wire(request.question[0].name)
                        pass
                     else:
                         raise Exception
             else:
                 result = dns.message.make_response(request)
                 result.set_rcode(5)
+                pack = result.to_wire(request.question[0].name)
         except:
             logging.exception('UDP HANDLE')
             request = dns.message.from_wire(data)
             result = dns.message.make_response(request)
             result.set_rcode(2)
-        finally:
             pack = result.to_wire(request.question[0].name)
-            
-        self.transport.sendto(pack, addr)
+        finally:
+            self.transport.sendto(pack, addr)
         try:
             #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
             #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
@@ -104,9 +116,9 @@ def newone(ip, port):
     transport.close()
     loop.close()
 
-def launcher(c:Pipe, CONF):
+def launcher(c:Pipe, CONF, CACHE):
     # -Counter-
-    if CONF['GENERAL']['printstats'] is True:
+    if eval(CONF['GENERAL']['printstats']) is True:
         threading.Thread(target=counter, args=(c,)).start()
 
     # -DB Engines
@@ -121,7 +133,8 @@ def launcher(c:Pipe, CONF):
     _recursive = Recursive(engine0, CONF)
 
     global _cache
-    _cache = Caching(engine1, CONF)
+    _cache = CACHE
+    #Caching(engine1, CONF)
 
     global _CONF
     _CONF = CONF # <- for asyncio class
@@ -178,6 +191,7 @@ def Parallel(data):
 
 # --- Main Function ---
 def handler(CONF):
+
     # -DB Engines
     engineH = enginer(CONF) # < - for background
 
@@ -190,33 +204,43 @@ def handler(CONF):
 
         # -Start server for each core-
         Parents = []
-        for i in range(cpu_count()):
-            parent, child = Pipe()
-            name = f'#{i}'
-            Process(target=launcher, args=(child, CONF), name=name).start()
-            Parents.append(parent)
-        
-        # -Counter-
-        if CONF['GENERAL']['printstats'] is True:
-            threading.Thread(target=counter, args=(Parents,True)).start()
-        
+        Stream = []
+        with Manager() as manager:
+            _cache = Caching(enginer(CONF), CONF, manager.dict())
+            for i in range(cpu_count()):
+                parent, child = Pipe()
+                name = f'#{i}'
+                p = Process(target=launcher, args=(child, CONF, _cache), name=name)
+                p.start()
+                Stream.append(p)
+                Parents.append(parent)
+
+            # -Counter-
+            if eval(CONF['GENERAL']['printstats']) is True:
+                threading.Thread(target=counter, args=(Parents,True), daemon=True).start()
+            
+            for p in Stream:
+                p.join()
+
         # -Start technical socket
         #Process(target=techsock).start()
         techsock()
 
-
     except KeyboardInterrupt: pass
+
 if __name__ == "__main__":
     try:
         if sys.argv[1:]:
             path = os.path.abspath(sys.argv[1])
             if os.path.exists(path):
-                CONF = getconf(sys.argv[1]) # <- for manual start
+                CONF, state = getconf(sys.argv[1]) # <- for manual start
             else:
                 print('Missing config file at %s' % path)
         else:
             thisdir = os.path.dirname(os.path.abspath(__file__))
-            CONF = getconf(thisdir+'/config.ini')
+            CONF, state = getconf(thisdir+'/config.ini')
+        if state is False:
+            raise Exception()
     except:
         print('Bad config file')
         sys.exit()
