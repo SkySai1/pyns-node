@@ -46,29 +46,27 @@ class UDPserver(asyncio.DatagramProtocol):
         _COUNT +=1
         try:
             request = dns.message.from_wire(data)
-            print(UDPserver.railway(self, request, addr[0]))
             if UDPserver.railway(self, request, addr[0]) is True:
-                answer = _cache.getcache(request, data)
-                print(type(answer))
-                if not answer:
-                    data = _auth.authority(request)
-                    if data.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
-                        data = _recursive.recursive(request)
-                    if data and type(data) is dns.message.QueryMessage:
+                result = _cache.getcache(request, data)
+                if not result:
+                    result = _auth.authority(request)
+                    if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:
+                        result = _recursive.recursive(request)
+                    if result and type(result) is dns.message.QueryMessage:
                        #threading.Thread(target=_cache.putcache, args=(data,)).start()
-                       answer = data
+                       pass
                     else:
                         raise Exception
             else:
-                answer = dns.message.make_response(request)
-                answer.set_rcode(5)
+                result = dns.message.make_response(request)
+                result.set_rcode(5)
         except:
             logging.exception('UDP HANDLE')
             request = dns.message.from_wire(data)
-            answer = dns.message.make_response(request)
-            answer.set_rcode(2)
+            result = dns.message.make_response(request)
+            result.set_rcode(2)
         finally:
-            pack = answer.to_wire(request.question[0].name)
+            pack = result.to_wire(request.question[0].name)
             
         self.transport.sendto(pack, addr)
         try:
