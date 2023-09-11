@@ -31,7 +31,7 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
-_DEBUG = 1
+_DEBUG = 0
 
 QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
         15:'MX', 16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY',
