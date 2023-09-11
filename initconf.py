@@ -22,10 +22,22 @@ def getconf(path):
             for key in _OPTIONS[section]:
                 if config.has_option(section, key) is not True: bad.append(f'Bad config file: missing key - {key} in {section} section')
         if bad: raise Exception("\n".join(bad))
-        return config
+        if checkconf(config) is True:
+            return config, True
+        else:
+            return None, False
     except Exception as e:
         print(e)
         sys.exit()
+
+def checkconf(CONF):
+    try:
+        eval(CONF['GENERAL']['printstats'])
+        return True
+    except Exception as e:
+        print(e)
+        return False
+
 
 def createconf(where, what:configparser.ConfigParser):
     with open(where, 'w+') as f:
