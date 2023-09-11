@@ -71,11 +71,11 @@ class Recursive:
             try:
                 random.shuffle(_ROOT)
                 global depth
-                depth = 0
                 for i in range(3):
+                    depth = 0
                     result,_ = Recursive.resolve(self, query, _ROOT[i])
-                    if dns.flags.AA in result.flags: break
-                    if result and dns.flags.AA in result.flags: break
+                    if type(result) is dns.message.QueryMessage: break
+                    '''if dns.flags.AA in result.flags: break''' #< - FOR FUTURE!
                 if not result: raise Exception 
                 # - Caching in DB at success resolving
                 #threading.Thread(target=Recursive.upload, args=(self, result)).start()
@@ -134,7 +134,7 @@ class Recursive:
             result.set_rcode(2)
             return result, ns
 
-        if dns.flags.AA in result.flags: 
+        if result.answer:
             return result, ns # <- If got a rdata then return it
         
         if result.additional:
