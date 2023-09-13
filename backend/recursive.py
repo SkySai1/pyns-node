@@ -13,7 +13,6 @@ import dns.rcode
 import dns.name
 import dns.flags
 import logging
-from backend.accessdb import AccessDB
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.
@@ -77,27 +76,12 @@ class Recursive:
                     if type(result) is dns.message.QueryMessage: break
                     '''if dns.flags.AA in result.flags: break''' #< - FOR FUTURE!
                 if not result: raise Exception 
-                # - Caching in DB at success resolving
-                #threading.Thread(target=Recursive.upload, args=(self, result)).start()
                 return  result# <- In anyway returns byte's packet and DNS Record data
             except: # <-In any troubles at process resolving returns request with SERVFAIL code
                 logging.exception(f'Stage: Recursive: {query.question}')
                 result = dns.message.make_response(query)
                 result.set_rcode(2)
                 return result
-
-    def upload(self, result:dns.message.Message):
-        db = AccessDB(self.engine, self.conf) # <- Init Data Base
-        if int(result.rcode()) == 0 and result.answer:
-            for records in result.answer:
-                for rr in records:
-                    rdata= str(rr)
-                    ttl = int(records.ttl)
-                    if self.state is True and ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                        rname = str(records.name)
-                        rclass = CLASS[records.rdclass]
-                        rtype = QTYPE[records.rdtype]
-                        db.PutInCache(rname, ttl, rclass, rtype, rdata)
 
     def resolve(self, query:dns.message.QueryMessage, ns):
         # -Checking current recursion depth-

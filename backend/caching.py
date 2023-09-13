@@ -1,5 +1,6 @@
 import datetime
 import logging
+from multiprocessing.managers import DictProxy, ListProxy
 import threading
 import time
 import sys
@@ -14,13 +15,15 @@ from backend.accessdb import AccessDB
 # --- Cahe job ---
 class Caching:
 
-    def __init__(self, engine, _CONF, CACHE:dict):
+    def __init__(self, engine, _CONF, CACHE:DictProxy, TEMP:ListProxy):
         self.conf = _CONF
         self.engine = engine
-        self.refresh = int(_CONF['CACHING']['refresh'])
+        self.refresh = int(_CONF['DATABASE']['timesync'])
         self.cache = CACHE
-        if self.refresh > 0:
-            Caching.totalcache(self)
+        self.temp = TEMP
+        self.state = True
+        self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
+        #if self.refresh > 0: Caching.totalcache(self)
 
 
     def get(self, data:dns.message.Message, id:bytes):
@@ -31,14 +34,29 @@ class Caching:
             return id + self.cache[record]
         return None
 
-    def put(self, data:dns.message.Message):
+    def put(self, data:dns.message.Message, packet:bytes=None):
         record = binascii.hexlify(data.question[0].to_text().encode())
         packet = data.to_wire()
         if not record in self.cache and self.refresh > 0:
             self.cache[record] = packet[2:]
             #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
+            self.temp.append(data)
+            #print(self.temp)
+            # - Caching in DB at success resolving
+            
 
-    def clearcache(self, record):
+    def upload(self):
+        try:
+            db = AccessDB(self.engine, self.conf) # <- Init Data Base
+            if self.temp:
+                db.PutInCache(self.temp)
+                #print(type(self.temp), self.temp)
+                [self.temp.pop(0) for i in range(self.temp.__len__())]
+            self.maxthreads.release()
+        except:
+            logging.exception('FAIL WITH DB CACHING')
+
+    def clear(self, record):
         try:
             while True:
                 time.sleep(self.refresh)

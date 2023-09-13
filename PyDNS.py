@@ -192,21 +192,15 @@ def Parallel(data):
 # --- Main Function ---
 def handler(CONF):
 
-    # -DB Engines
-    engineH = enginer(CONF) # < - for background
-
-    # -Init Classes
-    helper = Helper(engineH, CONF)
-
     try: 
-        # -Start background worker
-        Process(target=helper.watcher).start()
-
-        # -Start server for each core-
-        Parents = []
-        Stream = []
         with Manager() as manager:
-            _cache = Caching(enginer(CONF), CONF, manager.dict())
+            # -Init Classes
+            _cache = Caching(enginer(CONF), CONF, manager.dict(), manager.list())
+            helper = Helper(enginer(CONF), CONF, _cache)
+
+            # -Start server for each core-
+            Parents = []
+            Stream = []
             for i in range(cpu_count()):
                 parent, child = Pipe()
                 name = f'#{i}'
@@ -214,6 +208,9 @@ def handler(CONF):
                 p.start()
                 Stream.append(p)
                 Parents.append(parent)
+            
+            # -Start background worker
+            Stream.append(Process(target=helper.watcher).start())
 
             # -Counter-
             if eval(CONF['GENERAL']['printstats']) is True:

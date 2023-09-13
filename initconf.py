@@ -8,9 +8,9 @@ import logging
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats'],
     'AUTHORITY': [],
-    'CACHING': ['refresh'],
+    'CACHING': ['maxthreads'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
-    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname', 'timedelta'],
+    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname', 'timedelta', 'timesync'],
 }
 
 def getconf(path):
@@ -33,6 +33,7 @@ def getconf(path):
 def checkconf(CONF):
     try:
         eval(CONF['GENERAL']['printstats'])
+        int(CONF['CACHING']['maxthreads'])
         return True
     except Exception as e:
         print(e)
@@ -59,8 +60,8 @@ def deafultconf():
 
     }
     config['CACHING'] = {
-        ";Time to retake data from Data Base":None,
-        'refresh': 5
+        ";Max threads at time to DB upload":None,
+        'maxthreads': 10
     }
     config['RECURSION'] = {
         'enable': False,
@@ -78,6 +79,8 @@ def deafultconf():
         'dbname': DBName,
         ";For mysql better keep timedelta as 0, for pgsql as your region timezone": None,
         'timedelta': 3,
+        ";Time to sync with Data Base":None,
+        'timesync': 5,
     }
     return config
 

@@ -6,7 +6,7 @@ import psycopg2
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
 from backend.rulesmaker import makerules
-
+from backend.recursive import QTYPE, CLASS
 
 # --- DB structure
 Base = declarative_base()
@@ -155,28 +155,39 @@ class AccessDB:
 
 
     # -- Cache functions
-    def PutInCache(self, rname, ttl, rclass, rtype, rdata):
+    def PutInCache(self, data):
         with Session(self.engine) as conn:
-            stmt = (select(Cache)
-                    .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
-                    .filter(Cache.dclass == rclass)
-                    .filter(Cache.type == rtype)
-                    .filter(Cache.data == rdata)
-            )
-            result = conn.execute(stmt).first()
-            if not result:
-                stmt = insert(Cache).values(
-                    name = rname,
-                    ttl = ttl,
-                    dclass = rclass,
-                    type = rtype,
-                    data = rdata,
-                    cached = getnow(self.timedelta, 0),
-                    expired = getnow(self.timedelta, ttl)
-                )
-                conn.execute(stmt)
-                conn.commit()
-
+            for result in data:
+                if int(result.rcode()) == 0 and result.answer:
+                    for records in result.answer:
+                        for rr in records:
+                            rdata= str(rr)
+                            ttl = int(records.ttl)
+                            if ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
+                                rname = str(records.name)
+                                rclass = CLASS[records.rdclass]
+                                rtype = QTYPE[records.rdtype]
+                        if rname and rclass and rtype:
+                            stmt = (select(Cache)
+                                .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
+                                .filter(Cache.dclass == rclass)
+                                .filter(Cache.type == rtype)
+                                .filter(Cache.data == rdata)
+                            )
+                            result = conn.execute(stmt).first()
+                            if not result:
+                                stmt = insert(Cache).values(
+                                    name = rname,
+                                    ttl = ttl,
+                                    dclass = rclass,
+                                    type = rtype,
+                                    data = rdata,
+                                    cached = getnow(self.timedelta, 0),
+                                    expired = getnow(self.timedelta, ttl)
+                                )
+                                conn.execute(stmt)
+            conn.commit()
+             
     def GetFromCache(self, qname = None, qclass = None, qtype = None):
         with Session(self.engine) as conn:
             if not qname and not qclass and not qtype:
