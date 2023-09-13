@@ -31,12 +31,8 @@ class Caching:
     def get(self, data:bytes):
         request = dns.message.from_wire(data)
         record = binascii.hexlify(request.question[0].to_text().encode()).decode()
-        #if record in self.cache:
-            #print(f"{data.question[0].to_text()} was returned from local")
-        try: 
-            return self.cache[record]
-        except:
-            return None
+        #print(f"{data.question[0].to_text()} was returned from local")
+        return self.cache.get(record)
 
     def put(self, data:dns.message.Message, packet:bytes=None):
         record = binascii.hexlify(data.question[0].to_text().encode()).decode()
