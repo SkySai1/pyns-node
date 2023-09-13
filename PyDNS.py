@@ -22,17 +22,25 @@ from initconf import getconf
 from backend.helper import Helper
 from backend.techincal import Tech
 from backend.accessdb import enginer
-
+from backend.tcache import fastget, testget
 
 _COUNT = 0
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
 
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching) -> None:
+        self.auth = _auth
+        self.recursive = _recursive
+        self.cache = _cache
+        super().__init__()
+
     def connection_made(self, transport:asyncio.DatagramTransport,):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        UDPserver.handle(self, data, addr)
+        result = UDPserver.handle(self, data, addr)
+        #UDPserver.thandle(self, data, addr)
+        self.transport.sendto(result, addr)
 
     def railway(self, request:dns.message.Message, ip):
         try:
@@ -45,42 +53,35 @@ class UDPserver(asyncio.DatagramProtocol):
         global _COUNT
         _COUNT +=1
         request = dns.message.from_wire(data)
-        result = _cache.get(request, data[:2])
+        #result = self.cache.get(request, data[:2])
         self.transport.sendto(data, addr)
 
 
     def handle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
-
-        try:
-            request = dns.message.from_wire(data)
-            if UDPserver.railway(self, request, addr[0]) is True:
-                result = _cache.get(request, data[:2])
-                if result:
-                    pack = result
-                else:
-                    '''result = _auth.authority(request)'''
-                    '''if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:'''
-                    result = _recursive.recursive(request)
-                    if result and type(result) is dns.message.QueryMessage:
-                       threading.Thread(target=_cache.put, args=(result,)).start()
-                       pack = result.to_wire(request.question[0].name)
-                       pass
-                    else:
-                        raise Exception
+        try:            
+            result = self.cache.get(data)
+            #result = fasttget(data)
+            if result:
+                return data[:2]+result
             else:
-                result = dns.message.make_response(request)
-                result.set_rcode(5)
-                pack = result.to_wire(request.question[0].name)
+                request = dns.message.from_wire(data)
+                '''result = _auth.authority(request)'''
+                '''if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:'''
+                result = self.recursive.recursive(request)
+                if result and type(result) is dns.message.QueryMessage:
+                    threading.Thread(target=self.cache.put, args=(result,)).start()
+                    return result.to_wire(request.question[0].name)
+                    pass
+                else:
+                    raise Exception
         except:
             logging.exception('UDP HANDLE')
             request = dns.message.from_wire(data)
             result = dns.message.make_response(request)
             result.set_rcode(2)
-            pack = result.to_wire(request.question[0].name)
-        finally:
-            self.transport.sendto(pack, addr)
+            return result.to_wire(request.question[0].name)
         try:
             #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
             #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
@@ -102,11 +103,12 @@ def techsock():
         tech.close()
         sys.exit()
 
-def newone(ip, port):
+def newone(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching):
     addr = (ip, port)
     print(f"Core {current_process().name} Start listen to: {addr}")
     loop = asyncio.new_event_loop()
-    listen = loop.create_datagram_endpoint(UDPserver, addr, reuse_port=True)
+    listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache)
+                                           , addr, reuse_port=True)
     transport, protocol = loop.run_until_complete(listen)
     try:
         loop.run_forever()
@@ -116,25 +118,15 @@ def newone(ip, port):
     transport.close()
     loop.close()
 
-def launcher(c:Pipe, CONF, CACHE):
+def launcher(c:Pipe, CONF, _cache):
     # -Counter-
     if eval(CONF['GENERAL']['printstats']) is True:
         threading.Thread(target=counter, args=(c,)).start()
 
-    # -DB Engines
-    engine0 = enginer(CONF) # < - for recursive
-    engine1 = enginer(CONF) # < - for caching
-
     # -Init Classes
-    global _auth
     _auth = Authority(CONF)
 
-    global _recursive
-    _recursive = Recursive(engine0, CONF)
-
-    global _cache
-    _cache = CACHE
-    #Caching(engine1, CONF)
+    _recursive = Recursive(CONF)
 
     global _CONF
     _CONF = CONF # <- for asyncio class
@@ -143,7 +135,7 @@ def launcher(c:Pipe, CONF, CACHE):
     port = CONF['GENERAL']['listen-port']
     try:
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=newone, args=(ip, port)).start()
+            threading.Thread(target=newone, args=(ip, port, _auth, _recursive, _cache)).start()
     except:
         logging.exception('ERROR with listen on')
 

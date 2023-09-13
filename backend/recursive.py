@@ -48,10 +48,9 @@ CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Recursive:
 
-    def __init__(self, engine, _CONF, iscache = True):
+    def __init__(self, _CONF, iscache = True):
         try:
             self.conf = _CONF
-            self.engine = engine
             self.state = iscache
             self.depth = int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])

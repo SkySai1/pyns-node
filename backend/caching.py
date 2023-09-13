@@ -8,12 +8,15 @@ import dns.message
 import dns.rrset
 import hashlib
 import binascii
+from backend.tcache import fastget, convert
 from backend.recursive import QTYPE, CLASS
 from functools import lru_cache
 from backend.accessdb import AccessDB
+from async_lru import alru_cache
 
 # --- Cahe job ---
 class Caching:
+    cache = {}
 
     def __init__(self, engine, _CONF, CACHE:DictProxy, TEMP:ListProxy):
         self.conf = _CONF
@@ -25,22 +28,24 @@ class Caching:
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
         #if self.refresh > 0: Caching.totalcache(self)
 
-
-    def get(self, data:dns.message.Message, id:bytes):
-        record = binascii.hexlify(data.question[0].to_text().encode())
-
-        if record in self.cache:
+    def get(self, data:bytes):
+        request = dns.message.from_wire(data)
+        record = binascii.hexlify(request.question[0].to_text().encode()).decode()
+        #if record in self.cache:
             #print(f"{data.question[0].to_text()} was returned from local")
-            return id + self.cache[record]
-        return None
+        try: 
+            return self.cache[record]
+        except:
+            return None
 
     def put(self, data:dns.message.Message, packet:bytes=None):
-        record = binascii.hexlify(data.question[0].to_text().encode())
+        record = binascii.hexlify(data.question[0].to_text().encode()).decode()
         packet = data.to_wire()
         if not record in self.cache and self.refresh > 0:
             self.cache[record] = packet[2:]
-            #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
+            print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
             self.temp.append(data)
+            Caching.cache = self.cache
             #print(self.temp)
             # - Caching in DB at success resolving
             
