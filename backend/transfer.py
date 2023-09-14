@@ -9,6 +9,7 @@ import dns.rdata
 import dns.tsigkeyring
 import dns.name
 import dns.message
+import dns.tsig
 #from PyDNS import create_engine
 from backend.accessdb import AccessDB, enginer, getnow
 from backend.zonemanager import Zonemaker
@@ -28,60 +29,69 @@ QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
 CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
-    def __init__(self, conf, zone, target, tsig):
-        self.conf = conf
+    def __init__(self, CONF, zone, target, tsig, keyname):
+        self.timedelta = int(CONF['DATABASE']['timedelta'])
+        self.conf = CONF
         self.zone = zone
         self.target = target
+        self.keyname = keyname
         self.tsig = tsig
 
     def getaxfr(self):
         try:
-            key = dns.tsigkeyring.from_text({
-            "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs=",
-            "mykey": "oUHtrekkN1RJ3MNjplEeO6Yxax46Qs7pR++NPpcH/4g="
-            })
-
+            
             qname = dns.name.from_text(self.zone)
             xfr = dns.message.make_query(qname, 'AXFR', 'IN')
-            if self.tsig:
-                xfr.use_tsig(key, "mykey")
-            response = dns.query.tcp(xfr, self.target)
+            try:
+                if self.tsig:
+                    key = dns.tsigkeyring.from_text({self.keyname:self.tsig})
+                    xfr.use_tsig(key, self.keyname)
+                response = dns.query.tcp(xfr, self.target)
+            except (dns.tsig.PeerBadKey):
+                return False, 'The host doesn\'t knows about this key (bad keyname)'
+            
+            except:
+                logging.exception('TRANSFER')
             Z = Zonemaker(self.conf)
-            soa = response.answer[0].to_text().split(' ')
-            zone = {
-                'name' : soa[0],
-                'type' : 'slave'
-            }
-            soadict = {
-                "name": soa[0],
-                "ttl": int(soa[1]),
-                "type": 'SOA',
-                "data": ' '.join(soa[4:])
-            }
-            id = Z.zonecreate(zone)
-            data = []
-            for r in response.answer:
-                row = {
-                    "zone_id": id,
-                    "name": r.name.to_text(),
-                    "ttl": r.ttl,
-                    "dclass": CLASS[r.rdclass],
-                    "type": QTYPE[r.rdtype],
-                    "data": str(r[0])
+            if response and response.answer:
+                soa = response.answer[0].to_text().split(' ')
+                zone = {
+                    'name' : soa[0],
+                    'type' : 'slave'
                 }
-                data.append(row)
-            Z.zonefilling(data)
-            refresh = int(soa[7])
-            retry = int(soa[8])
-            expire = int(soa[9])
-            policy = {
-                "expire": getnow(self.conf['timedelta'], expire),
-                "refresh": getnow(self.conf['timedelta'], refresh),
-                "retry": retry
-            }
-            Z.zonepolicy(id, policy)
+                soadict = {
+                    "name": soa[0],
+                    "ttl": int(soa[1]),
+                    "type": 'SOA',
+                    "data": ' '.join(soa[4:])
+                }
+                id = Z.zonecreate(zone)
+                data = []
+                for r in response.answer:
+                    row = {
+                        "zone_id": id,
+                        "name": r.name.to_text(),
+                        "ttl": r.ttl,
+                        "dclass": CLASS[r.rdclass],
+                        "type": QTYPE[r.rdtype],
+                        "data": str(r[0])
+                    }
+                    data.append(row)
+                Z.zonefilling(data)
+                refresh = int(soa[7])
+                retry = int(soa[8])
+                expire = int(soa[9])
+                policy = {
+                    "expire": getnow(self.timedelta, expire),
+                    "refresh": getnow(self.timedelta, refresh),
+                    "retry": retry
+                }
+                Z.zonepolicy(id, policy)
+                return True, None
+            else:
+                return False, "ERROR: Fail with zone transfer for %s" % self.zone
         except:
-            logging.exception('Get AXFR')
+            logging.exception('GETAXFR FUNCTION')
             pass
             
 

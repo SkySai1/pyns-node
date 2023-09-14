@@ -62,9 +62,7 @@ class UDPserver(asyncio.DatagramProtocol):
         _COUNT +=1
         try:            
             result = self.cache.get(data)
-            #result = fasttget(data)
-            if result:
-                return data[:2]+result
+            if result: return data[:2]+result
             else:
                 request = dns.message.from_wire(data)
                 '''result = _auth.authority(request)'''

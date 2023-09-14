@@ -2,13 +2,14 @@
 import datetime
 import logging
 import os
+import re
 import socket
 import sys
 
 from prettytable import PrettyTable
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session
-from backend.accessdb import AccessDB, checkconnect
+from backend.accessdb import AccessDB, checkconnect, enginer
 from backend.transfer import Transfer
 from backend.zonemanager import Zonemaker
 from initconf import getconf
@@ -78,9 +79,16 @@ def zonecreator():
         Z.zonefilling(soa)
     if data['type'] == 'slave':
         data['master'] = inputer("- Specify IP of master:\n",str)
-        data['tsig'] = inputer("- Specify TSIG key if you need it (none by default):\n",str, None)
-        axfr = Transfer(_CONF['init'], data['name'], data['master'], data['tsig'])
-        axfr.getaxfr()
+        data['tsig'] = inputer("- Specify TSIG key (hex value) if you need it (none by default):\n",str, None)
+        if data['tsig']:
+            data['tsig'] = re.sub('[\",\']','', data['tsig'])
+            data['keyname'] = inputer("- Specify TSIG key NAME (must be the same as from master):\n",str)
+            data['keyname'] = re.sub('[\",\']','', data['keyname'])
+        else: data['keyname'] = ''
+        axfr = Transfer(_CONF, data['name'], data['master'], data['tsig'], data['keyname'])
+        state, message = axfr.getaxfr()
+        if state is False:
+            print(message)
     
 
     printzones()
@@ -206,21 +214,28 @@ def test(one, two):
     #print(one,two)
 
 if __name__ == "__main__":
-    cpath = f"{os.path.abspath('./')}/config.conf"
-    _CONF = {}
-    _CONF['init'] = getconf(cpath)
-    engine = create_engine(
-        f"postgresql+psycopg2://{_CONF['init']['dbuser']}:{_CONF['init']['dbpass']}@{_CONF['init']['dbhost']}:{_CONF['init']['dbport']}/{_CONF['init']['dbname']}"
-    )
+    try:
+        if sys.argv[1:]:
+            path = os.path.abspath(sys.argv[1])
+            if os.path.exists(path):
+                _CONF, state = getconf(sys.argv[1]) # <- for manual start
+            else:
+                print('Missing config file at %s' % path)
+        else:
+            thisdir = os.path.dirname(os.path.abspath(__file__))
+            _CONF, state = getconf(thisdir+'/config.ini')
+        if state is False:
+            raise Exception()
+    except:
+        print('Bad config file')
+        sys.exit()
     try: 
-        checkconnect(engine, _CONF['init'])
+        engine = enginer(_CONF)
+        checkconnect(engine, _CONF)
     except: 
         print('Filed with DB connection')
         sys.exit()
 
-    Base = declarative_base()
-    Base.metadata.create_all(engine)
-
-    db = AccessDB(engine, _CONF['init'])
+    db = AccessDB(engine, _CONF)
     try: MainMenu()
     except KeyboardInterrupt: sys.exit()

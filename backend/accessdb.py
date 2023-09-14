@@ -83,8 +83,8 @@ class Rules(Base):
 class Join_ZonesRules(Base):
     __tablename__ = "zones_rules"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    zone_id = Column(Integer, ForeignKey('zones.id'))
-    rule_id = Column(Integer, ForeignKey('rules.id'))
+    zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'))
+    rule_id = Column(Integer, ForeignKey('rules.id', ondelete='cascade'))
     value = Column(Text, nullable=False)
 
 class AccessDB:
