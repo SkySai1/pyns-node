@@ -62,16 +62,18 @@ class UDPserver(asyncio.DatagramProtocol):
         _COUNT +=1
         try:            
             result = self.cache.get(data)
-            if result: return data[:2]+result
+            if result: 
+                print(dns.message.from_wire(data[:2]+result).question[0].name, 'returned from cache')
+                return data[:2]+result
             else:
                 request = dns.message.from_wire(data)
                 '''result = _auth.authority(request)'''
-                '''if result.rcode() == dns.rcode.NXDOMAIN and bool(_CONF['RECURSION']['enable']) is True:'''
-                result = self.recursive.recursive(request)
-                if result and type(result) is dns.message.QueryMessage:
-                    threading.Thread(target=self.cache.put, args=(result,)).start()
-                    return result.to_wire(request.question[0].name)
-                    pass
+                if eval(_CONF['RECURSION']['enable']) is True:
+                    result = self.recursive.recursive(request)
+                    if result and type(result) is dns.message.QueryMessage:
+                        threading.Thread(target=self.cache.put, args=(result,)).start()
+                        return result.to_wire(request.question[0].name)
+                        pass
                 else:
                     raise Exception
         except:

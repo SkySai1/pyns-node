@@ -3,7 +3,9 @@ import logging
 import uuid
 import sys
 import psycopg2
-from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, insert, select, or_, not_, update
+import dns.rdataclass
+import dns.rdatatype
+from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
 from backend.rulesmaker import makerules
 from backend.recursive import QTYPE, CLASS
@@ -67,7 +69,7 @@ class Cache(Base):
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
-    data = Column(Text)
+    data = Column(ARRAY(String))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
@@ -111,9 +113,12 @@ class AccessDB:
                 return None
 
     # -- Get from Domains
-    def GetDomain(self, qname, qclass, qtype = None):
+    def GetFromDomains(self, qname = None, qclass = None, qtype = None):
         #if type(qtype) is not list: qtype = [qtype]
         with Session(self.engine) as conn:
+            if not qname and not qclass and not qtype:
+                result = conn.execute(select(Domains)).fetchall()
+                return result
             stmt = (select(Zones)
                     .filter(Zones.name.in_(qname.split('.')))
 
@@ -158,26 +163,25 @@ class AccessDB:
     def PutInCache(self, data):
         with Session(self.engine) as conn:
             for result in data:
+                print(result)
                 if int(result.rcode()) == 0 and result.answer:
-                    for records in result.answer:
-                        for rr in records:
-                            rdata= str(rr)
-                            ttl = int(records.ttl)
-                            if ttl > 0 and rdata:  # <- ON FUTURE, DYNAMIC CACHING BAD RESPONCE
-                                rname = str(records.name)
-                                rclass = CLASS[records.rdclass]
-                                rtype = QTYPE[records.rdtype]
-                        if rname and rclass and rtype:
+                    for record in result.answer:
+                        ttl = record.ttl
+                        if ttl > 0:
+                            name = record.name.to_text()
+                            rclass = dns.rdataclass.to_text(record.rdclass)
+                            rtype = dns.rdatatype.to_text(record.rdtype)
+                            rdata = [rr.to_text() for rr in record]
+
                             stmt = (select(Cache)
-                                .filter(or_(Cache.name == rname, Cache.name == rname[:-1]))
+                                .filter(or_(Cache.name == name, Cache.name == name[:-1]))
                                 .filter(Cache.dclass == rclass)
                                 .filter(Cache.type == rtype)
-                                .filter(Cache.data == rdata)
                             )
                             result = conn.execute(stmt).first()
                             if not result:
                                 stmt = insert(Cache).values(
-                                    name = rname,
+                                    name = name,
                                     ttl = ttl,
                                     dclass = rclass,
                                     type = rtype,

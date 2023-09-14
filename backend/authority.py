@@ -33,11 +33,11 @@ class Authority:
             Q['class'] = rr[1].upper()
             Q['type'] = rr[2].upper()
             auth = None
-            result = db.GetDomain(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
+            result = db.GetFromDomains(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
             if not result:
                 result = db.GetFromCache(Q['name'], Q['class'], Q['type'])
             if not result: # <- if not exists required RR type then return authority list
-                auth = db.GetDomain(Q['name'], Q['class'], 'NS') # <- Check Authority
+                auth = db.GetFromDomains(Q['name'], Q['class'], 'NS') # <- Check Authority
             return result, auth
     
 def makeanswer(answer:dns.message.Message, dbresult, type = None):
