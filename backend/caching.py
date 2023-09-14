@@ -3,16 +3,11 @@ import logging
 from multiprocessing.managers import DictProxy, ListProxy
 import threading
 import time
-import sys
 import dns.message
 import dns.rrset
-import hashlib
 import binascii
-from backend.tcache import fastget, convert
 from backend.recursive import QTYPE, CLASS
-from functools import lru_cache
 from backend.accessdb import AccessDB
-from async_lru import alru_cache
 
 # --- Cahe job ---
 class Caching:
@@ -26,24 +21,20 @@ class Caching:
         self.temp = TEMP
         self.state = True
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
-        #if self.refresh > 0: Caching.totalcache(self)
+        if self.refresh > 0: Caching.totalcache(self)
 
     def get(self, data:bytes):
-        request = dns.message.from_wire(data)
-        record = binascii.hexlify(request.question[0].to_text().encode()).decode()
-        #print(f"{data.question[0].to_text()} was returned from local")
+        record = dns.message.from_wire(data).question[0].to_text().__hash__()
         return self.cache.get(record)
 
     def put(self, data:dns.message.Message, packet:bytes=None):
-        record = binascii.hexlify(data.question[0].to_text().encode()).decode()
+        record = data.question[0].to_text().__hash__()
         packet = data.to_wire()
         if not record in self.cache and self.refresh > 0:
             self.cache[record] = packet[2:]
             print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
             self.temp.append(data)
             Caching.cache = self.cache
-            #print(self.temp)
-            # - Caching in DB at success resolving
             
 
     def upload(self):
