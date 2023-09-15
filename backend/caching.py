@@ -12,6 +12,12 @@ import binascii
 from backend.recursive import QTYPE, CLASS
 from backend.accessdb import AccessDB
 
+def parser(data:bytes, i:int=13):
+    struct = data[i:]
+    for t in range(struct.__len__()):
+        if struct[t] == 0:
+            return struct[:t+5].__hash__()
+
 # --- Cahe job ---
 class Caching:
     def __init__(self, engine, _CONF, CACHE:DictProxy, TEMP:ListProxy):
@@ -21,25 +27,25 @@ class Caching:
         self.cache = CACHE
         self.temp = TEMP
         self.state = True
+        self.buff = set()
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
         #if self.refresh > 0: Caching.totalcache(self)
         if self.refresh > 0: Caching.download(self)
 
-    def parser(self, data:bytes):
-        struct = data[13:]
-        for t in range(struct.__len__()):
-            if struct[t] == 0: 
-                return struct[:t+5].__hash__()
 
     def get(self, data:bytes):
-        
+        for save in self.buff:
+            e = parser(save,11)
+            if e == parser(data,13): return save
         #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
-        return self.cache.get(Caching.parser(self, data))
+        result = self.cache.get(parser(data))
+        if result: self.buff.add(result)
+        return result
 
     def put(self, data:dns.message.Message):
         #print(self.cache.keys())
         packet = data.to_wire()
-        key = Caching.parser(self, packet)
+        key = parser(packet)
         if not key in self.cache and self.refresh > 0:
             self.cache[key] = packet[2:]
             #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {key}')
@@ -48,7 +54,8 @@ class Caching:
             
 
     def upload(self):
-        try:             
+        try:
+            self.buff.clear()             
             db = AccessDB(self.engine, self.conf) # <- Init Data Base
             if self.temp:
                 data = []
@@ -113,7 +120,7 @@ class Caching:
                         r = dns.message.make_response(q)
                         r.answer.append(dns.rrset.from_text_list(row.name,row.ttl,dclass,dtype,row.data))
                         packet = dns.message.Message.to_wire(r)
-                        key = Caching.parser(self, packet)
+                        key = parser(packet)
                         self.cache[key]=packet[2:]
             except:
                 logging.exception('CACHE LOAD FROM DB CACHE')
