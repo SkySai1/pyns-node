@@ -50,7 +50,7 @@ class Domains(Base):
     ttl = Column(Integer, default=60)
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
-    data = Column(Text)
+    data = Column(ARRAY(String))
 
 class Zones(Base):  
     __tablename__ = "zones" 
@@ -162,8 +162,12 @@ class AccessDB:
     # -- Cache functions
     def PutInCache(self, data):
         with Session(self.engine) as conn:
+            for rr in data:
+                rr.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, rr.get('ttl')))
+            conn.execute(insert(Cache), data)
+            conn.commit()
+            return None
             for result in data:
-                print(result)
                 if int(result.rcode()) == 0 and result.answer:
                     for record in result.answer:
                         ttl = record.ttl

@@ -22,7 +22,7 @@ class Caching:
         self.state = True
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
         #if self.refresh > 0: Caching.totalcache(self)
-        if self.refresh > 0: Caching.load(self)
+        if self.refresh > 0: Caching.download(self)
 
     def get(self, data:bytes):
         record = dns.message.from_wire(data).question[0].to_text().__hash__()
@@ -42,7 +42,17 @@ class Caching:
         try:
             db = AccessDB(self.engine, self.conf) # <- Init Data Base
             if self.temp:
-                db.PutInCache(self.temp)
+                data = []
+                for result in self.temp:
+                    for record in result.answer:
+                        data.append({
+                            'name':record.name.to_text(),
+                            'ttl':record.ttl,
+                            'rclass': dns.rdataclass.to_text(record.rdclass),
+                            'type': dns.rdatatype.to_text(record.rdclass),
+                            'data':[rr.to_text() for rr in record]
+                        })
+                db.PutInCache(data)
                 #print(type(self.temp), self.temp)
                 [self.temp.pop(0) for i in range(self.temp.__len__())]
             self.maxthreads.release()
@@ -80,49 +90,25 @@ class Caching:
             packet, data = Caching.precache(self, row[0], row[1], row[2])
             Caching.put(self,data,packet)
 
-    def load(self):
+    def download(self):
         db = AccessDB(self.engine, self.conf)
-        datac = set()
-        datad = set()
-
         # --Getting all records from cache tatble
-        rawcache = db.GetFromCache()
-        if rawcache:
+        rawdata = db.GetFromCache() + db.GetFromDomains()
+        if rawdata:
             try:
-                for obj in rawcache:
+                for obj in rawdata:
                     for row in obj:
-                        #print((d for d in row.data))
-                        datac.add((row.name, row.ttl, row.type, row.dclass, (d for d in row.data)))
+                        #print(row.data)
+                        dtype = dns.rdatatype.from_text(row.type)
+                        dclass = dns.rdataclass.from_text(row.dclass)
+                        q = dns.message.make_query(row.name, dtype, dclass)
+                        r = dns.message.make_response(q)
+                        r.answer.append(dns.rrset.from_text_list(row.name,row.ttl,dclass,dtype,row.data))
+                        key = r.question[0].to_text().__hash__()
+                        self.cache[key]=dns.message.Message.to_wire(r)[2:]
             except:
                 logging.exception('CACHE LOAD FROM DB CACHE')
-        
-        # --Getting all records from domains table
-        rawdomains = db.GetFromDomains()
-        if rawdomains:
-            try:
-                for obj in rawdomains:
-                    for row in obj:
-                        datad.add((row.name, row.type, row.dclass, row.data))
-                        #print(row.name, row.dclass, row.type, row.data)
-            except:
-                logging.exception('CACHE LOAD FROM DB DOMAINS')            
-        
-        # --Make precaching cache data
-        for record in datac:
-            qname = record[0]
-            ttl = int(record[1])
-            qtype = dns.rdatatype.from_text(record[2])
-            qclass = dns.rdataclass.from_text(record[3])
-            rdata = record[4]
-            q = dns.message.make_query(qname,qtype,qclass)
-            r = dns.message.make_response(q)
-            r.answer.append(dns.rrset.from_text_list(
-                qname,ttl,qclass,qtype,rdata))
-            key = r.question[0].to_text().__hash__()
-            print(record)
-            self.cache[key]=dns.message.Message.to_wire(r)[2:]
-            #print(self.cache)
-
+                  
 
     def precache(self, name, rdtype, rdclass):
         db = AccessDB(self.engine, self.conf)

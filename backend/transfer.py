@@ -5,6 +5,7 @@ import dns.query
 import dns.zone
 import dns.rdatatype
 import dns.rdtypes
+import dns.rdataclass
 import dns.rdata
 import dns.tsigkeyring
 import dns.name
@@ -54,37 +55,27 @@ class Transfer:
                 logging.exception('TRANSFER')
             Z = Zonemaker(self.conf)
             if response and response.answer:
-                soa = response.answer[0].to_text().split(' ')
-                zone = {
-                    'name' : soa[0],
-                    'type' : 'slave'
-                }
-                soadict = {
-                    "name": soa[0],
-                    "ttl": int(soa[1]),
-                    "type": 'SOA',
-                    "data": ' '.join(soa[4:])
-                }
-                id = Z.zonecreate(zone)
                 data = []
-                for r in response.answer:
-                    row = {
-                        "zone_id": id,
-                        "name": r.name.to_text(),
-                        "ttl": r.ttl,
-                        "dclass": CLASS[r.rdclass],
-                        "type": QTYPE[r.rdtype],
-                        "data": str(r[0])
-                    }
-                    data.append(row)
+                soa = response.answer[0][0]
+                id = Z.zonecreate({
+                    'name' : response.question[0].name.to_text(),
+                    'type' : 'slave'
+                })
+                for record in response.answer:
+                    data.append({
+                        'zone_id': id,
+                        'name':record.name.to_text(),
+                        'ttl':record.ttl,
+                        'rclass': dns.rdataclass.to_text(record.rdclass),
+                        'type': dns.rdatatype.to_text(record.rdtype),
+                        'data':[rr.to_text() for rr in record]
+                    })
+
                 Z.zonefilling(data)
-                refresh = int(soa[7])
-                retry = int(soa[8])
-                expire = int(soa[9])
                 policy = {
-                    "expire": getnow(self.timedelta, expire),
-                    "refresh": getnow(self.timedelta, refresh),
-                    "retry": retry
+                    "expire": getnow(self.timedelta, soa.expire),
+                    "refresh": getnow(self.timedelta, soa.retry),
+                    "retry": soa.retry
                 }
                 Z.zonepolicy(id, policy)
                 return True, None
