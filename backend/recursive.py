@@ -73,9 +73,11 @@ class Recursive:
                     depth = 0
                     result,_ = Recursive.resolve(self, query, _ROOT[i])
                     if type(result) is dns.message.QueryMessage: break
-                if dns.flags.AA in result.flags and not result.answer: 
+                if result and dns.flags.AA in result.flags and not result.answer: 
                     result.set_rcode(3)
-                if not result: raise Exception 
+                if not result: 
+                    result = dns.message.make_response(query)
+                    result.set_rcode(2)
                 return  result# <- In anyway returns byte's packet and DNS Record data
             except: # <-In any troubles at process resolving returns request with SERVFAIL code
                 logging.exception(f'Stage: Recursive: {query.question}')

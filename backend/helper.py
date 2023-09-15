@@ -17,15 +17,15 @@ class Helper:
     def watcher(self):
         db = AccessDB(self.engine, self.conf)
         try:
-            threading.Thread(target=Helper.uncache, args=(self, db)).start()
+            threading.Thread(target=Helper.cacheupdate, args=(self, db)).start()
+            pass
         except KeyboardInterrupt: 
             pass
 
-    def uncache(self, db:AccessDB):
+    def cacheupdate(self, db:AccessDB):
         try:
             while True:
-                db.CacheExpired(expired=getnow(self.timedelta, 0))
-                self.cache.maxthreads.acquire()
+                #db.CacheExpired(expired=getnow(self.timedelta, 0))
                 self.cache.upload()
                 time.sleep(self.sync)
         except:

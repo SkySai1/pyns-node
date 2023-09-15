@@ -22,19 +22,26 @@ class Caching:
         self.state = True
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
         #if self.refresh > 0: Caching.totalcache(self)
-        if self.refresh > 0: Caching.download(self)
+        #if self.refresh > 0: Caching.download(self)
+
+    def parser(self, data):
+        struct = data[13:]
+        for t in range(struct.__len__()):
+            if struct[t] == 0: 
+                return struct[:t+5].__hash__()
 
     def get(self, data:bytes):
-        record = dns.message.from_wire(data).question[0].to_text().__hash__()
-        print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text())
-        return self.cache.get(record)
+        
+        #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
+        return self.cache.get(Caching.parser(self, data))
 
-    def put(self, data:dns.message.Message, packet:bytes=None):
-        record = data.question[0].to_text().__hash__()
+    def put(self, data:dns.message.Message):
+        #print(self.cache.keys())
         packet = data.to_wire()
-        if not record in self.cache and self.refresh > 0:
-            self.cache[record] = packet[2:]
-            #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {record}')
+        key = Caching.parser(self, packet)
+        if not key in self.cache and self.refresh > 0:
+            self.cache[key] = packet[2:]
+            #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {key}')
             self.temp.append(data)
             
 
@@ -49,13 +56,12 @@ class Caching:
                             'name':record.name.to_text(),
                             'ttl':record.ttl,
                             'rclass': dns.rdataclass.to_text(record.rdclass),
-                            'type': dns.rdatatype.to_text(record.rdclass),
+                            'type': dns.rdatatype.to_text(record.rdtype),
                             'data':[rr.to_text() for rr in record]
                         })
-                db.PutInCache(data)
+                #db.PutInCache(data)
                 #print(type(self.temp), self.temp)
                 [self.temp.pop(0) for i in range(self.temp.__len__())]
-            self.maxthreads.release()
         except:
             logging.exception('FAIL WITH DB CACHING')
 

@@ -22,7 +22,6 @@ from initconf import getconf
 from backend.helper import Helper
 from backend.techincal import Tech
 from backend.accessdb import enginer
-from backend.tcache import fastget, testget
 
 _COUNT = 0
 # --- UDP socket ---
@@ -52,9 +51,9 @@ class UDPserver(asyncio.DatagramProtocol):
     def thandle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
-        request = dns.message.from_wire(data)
+        #request = dns.message.from_wire(data)
+        return data
         #result = self.cache.get(request, data[:2])
-        self.transport.sendto(data, addr)
 
 
     def handle(self, data:bytes, addr:tuple):
@@ -63,7 +62,7 @@ class UDPserver(asyncio.DatagramProtocol):
         try:            
             result = self.cache.get(data)
             if result: 
-                print(dns.message.from_wire(data[:2]+result).question[0].name, 'returned from cache')
+                #print(dns.message.from_wire(data[:2]+result).question[0].name, 'returned from cache')
                 return data[:2]+result
             else:
                 request = dns.message.from_wire(data)
