@@ -74,7 +74,10 @@ class UDPserver(asyncio.DatagramProtocol):
                         return result.to_wire(request.question[0].name)
                         pass
                 else:
-                    raise Exception
+                    request = dns.message.from_wire(data)
+                    result = dns.message.make_response(request)
+                    result.set_rcode(5)
+                    return result.to_wire(request.question[0].name)
         except:
             logging.exception('UDP HANDLE')
             request = dns.message.from_wire(data)
