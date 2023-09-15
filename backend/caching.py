@@ -12,7 +12,7 @@ import binascii
 from backend.recursive import QTYPE, CLASS
 from backend.accessdb import AccessDB
 #pragma warning(disable: 4101)
-try: from backend.cparser import parser  
+try: from backend.cparser import parser
 except: from backend.parser import parser
 
 def parser(data:bytes, i:int=13):
@@ -38,8 +38,8 @@ class Caching:
 
     def get(self, data:bytes):
         for save in self.buff:
-            e = P(save,11)
-            if e == P(data,13): return save
+            e = parser(save,11)
+            if e == parser(data,13): return save
         #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
         result = self.cache.get(parser(data))
         if result: self.buff.add(result)
