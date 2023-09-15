@@ -7,6 +7,7 @@ import dns.message
 import dns.rrset
 import dns.rdatatype
 import dns.rdataclass
+import dns.rcode
 import binascii
 from backend.recursive import QTYPE, CLASS
 from backend.accessdb import AccessDB
@@ -22,9 +23,9 @@ class Caching:
         self.state = True
         self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
         #if self.refresh > 0: Caching.totalcache(self)
-        #if self.refresh > 0: Caching.download(self)
+        if self.refresh > 0: Caching.download(self)
 
-    def parser(self, data):
+    def parser(self, data:bytes):
         struct = data[13:]
         for t in range(struct.__len__()):
             if struct[t] == 0: 
@@ -42,15 +43,17 @@ class Caching:
         if not key in self.cache and self.refresh > 0:
             self.cache[key] = packet[2:]
             #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {key}')
-            self.temp.append(data)
+            if data.rcode() is dns.rcode.NOERROR:
+                self.temp.append(data)
             
 
     def upload(self):
-        try:
+        try:             
             db = AccessDB(self.engine, self.conf) # <- Init Data Base
             if self.temp:
                 data = []
                 for result in self.temp:
+                    Q = result.question[0]
                     for record in result.answer:
                         data.append({
                             'name':record.name.to_text(),
@@ -59,8 +62,7 @@ class Caching:
                             'type': dns.rdatatype.to_text(record.rdtype),
                             'data':[rr.to_text() for rr in record]
                         })
-                #db.PutInCache(data)
-                #print(type(self.temp), self.temp)
+                db.PutInCache(data)
                 [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
             logging.exception('FAIL WITH DB CACHING')
@@ -110,8 +112,9 @@ class Caching:
                         q = dns.message.make_query(row.name, dtype, dclass)
                         r = dns.message.make_response(q)
                         r.answer.append(dns.rrset.from_text_list(row.name,row.ttl,dclass,dtype,row.data))
-                        key = r.question[0].to_text().__hash__()
-                        self.cache[key]=dns.message.Message.to_wire(r)[2:]
+                        packet = dns.message.Message.to_wire(r)
+                        key = Caching.parser(self, packet)
+                        self.cache[key]=packet[2:]
             except:
                 logging.exception('CACHE LOAD FROM DB CACHE')
                   

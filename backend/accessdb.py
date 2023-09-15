@@ -162,38 +162,19 @@ class AccessDB:
     # -- Cache functions
     def PutInCache(self, data):
         with Session(self.engine) as conn:
-            for rr in data:
-                rr.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, rr.get('ttl')))
-            conn.execute(insert(Cache), data)
-            conn.commit()
-            return None
-            for result in data:
-                if int(result.rcode()) == 0 and result.answer:
-                    for record in result.answer:
-                        ttl = record.ttl
-                        if ttl > 0:
-                            name = record.name.to_text()
-                            rclass = dns.rdataclass.to_text(record.rdclass)
-                            rtype = dns.rdatatype.to_text(record.rdtype)
-                            rdata = [rr.to_text() for rr in record]
-
-                            stmt = (select(Cache)
-                                .filter(or_(Cache.name == name, Cache.name == name[:-1]))
-                                .filter(Cache.dclass == rclass)
-                                .filter(Cache.type == rtype)
-                            )
-                            result = conn.execute(stmt).first()
-                            if not result:
-                                stmt = insert(Cache).values(
-                                    name = name,
-                                    ttl = ttl,
-                                    dclass = rclass,
-                                    type = rtype,
-                                    data = rdata,
-                                    cached = getnow(self.timedelta, 0),
-                                    expired = getnow(self.timedelta, ttl)
-                                )
-                                conn.execute(stmt)
+            for record in data:
+                ttl = record.get('ttl')
+                if ttl > 0:
+                    name = record.get('name')
+                    stmt = (select(Cache)
+                        .filter(or_(Cache.name == name, Cache.name == name[:-1]))
+                        .filter(Cache.dclass == record.get('rclass'))
+                        .filter(Cache.type == record.get('type'))
+                    )
+                    result = conn.execute(stmt).first()
+                    if not result:
+                        record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
+                        conn.execute(insert(Cache),record)
             conn.commit()
              
     def GetFromCache(self, qname = None, qclass = None, qtype = None):

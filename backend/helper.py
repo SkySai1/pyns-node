@@ -25,7 +25,7 @@ class Helper:
     def cacheupdate(self, db:AccessDB):
         try:
             while True:
-                #db.CacheExpired(expired=getnow(self.timedelta, 0))
+                db.CacheExpired(expired=getnow(self.timedelta, 0))
                 self.cache.upload()
                 time.sleep(self.sync)
         except:
