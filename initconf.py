@@ -33,6 +33,7 @@ def getconf(path):
 def checkconf(CONF):
     try:
         eval(CONF['GENERAL']['printstats'])
+        eval(CONF['RECURSION']['enable'])
         int(CONF['CACHING']['maxthreads'])
         return True
     except Exception as e:

@@ -70,6 +70,7 @@ class Cache(Base):
     dclass = Column(String(2), default='IN')   
     type = Column(String(10))
     data = Column(ARRAY(String))
+    flags = Column(String(20))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)

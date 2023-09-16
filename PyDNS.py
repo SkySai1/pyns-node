@@ -59,7 +59,8 @@ class UDPserver(asyncio.DatagramProtocol):
     def handle(self, data:bytes, addr:tuple):
         global _COUNT
         _COUNT +=1
-        try:            
+        try:
+            #print(dns.message.from_wire(data).question)            
             result = self.cache.get(data)
             if result: 
                 #print(dns.message.from_wire(data[:2]+result).question[0].name, 'returned from cache')
