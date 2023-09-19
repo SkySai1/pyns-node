@@ -36,7 +36,10 @@
 
 For a node as part of PyNS the main purpose is getting data from database like options, politics and resource records and resolve clients queries using ones.
 
-At this time the node working only with PostgreSQL database.
+At this time the node working only with PostgreSQL database. Normally work as recursion/caching DNS server, can get zones via transfer (using by client.py) and resolving queries from this zones.
+
+For some database debug there is "client.py" tool (at now can print zones and cache tables).
+
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
 
@@ -52,7 +55,7 @@ sudo apt install libpq-dev #For postgresql
 
 ### Installing
 
-After install libraries you need to clone it
+After install libraries you need to clone this app
 ```
 git clone https://github.com/SkySai1/dnspy.git ./pyns
 cd ./pyns
@@ -70,7 +73,7 @@ At the end you need to change interprete's path via venvadapt.sh
 ./venvadapt.sh
 ```
 
-As an option you can raise performance by changing one of files to Cython mode:
+As an option you can raise performance by changing one of files (with function of byte's data parsing) to Cython mode:
 ```
 ./cmode.sh
 ```
