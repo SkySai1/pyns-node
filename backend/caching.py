@@ -39,7 +39,7 @@ class Caching:
 
 
     def get(self, data:bytes):
-        parse = parser(data,13, True)
+        parse = parser(data,13)
         for save in self.buff:
             if parse == parser(save,11):
                 return save

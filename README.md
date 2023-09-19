@@ -106,6 +106,7 @@ enable = True
 - ✅ **Configuration from file.** *Done.*
 - 🚩 **Logging mechanism** ...
 - 🚩 **Expand settings and politics** ...
+- 🚩 **Debug mode** ...
 
 ### CACHING
 - ✅ **Put and Get mechanism.** *Done. Via class*.
@@ -114,11 +115,13 @@ enable = True
 - ✅ **Precache data from DB.** *Done.*
 - ✅ **Save flags in DB.** *Done.*
 - 🚩 **Cache and set() clean** *Test with DB cache compare and without*
+- 🚩 **Enableable of cache upload** *Abilty to upload local cache to DB for this node*
 
 ### RECURSION
 - ✅ **Recursion mechanism.** *Done.*
 - ✅ **Switch Recursion enabling in config.** *Done.*
 - ✅ **Caching data afer recursion.** *Done.*
+
 
 ### AUTHORITY
 - ✅ **Keep DNS domains in DB.** *Done.*
