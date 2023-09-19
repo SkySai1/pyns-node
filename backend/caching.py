@@ -39,7 +39,7 @@ class Caching:
 
 
     def get(self, data:bytes):
-        parse = parser(data)
+        parse = parser(data,13, True)
         for save in self.buff:
             if parse == parser(save,11):
                 return save
@@ -75,17 +75,18 @@ class Caching:
         for obj in rawdata:
             for row in obj:
                 flags = ''
+                name = row.name.encode('idna').decode('utf-8')
                 dtype = dns.rdatatype.from_text(row.type)
                 dclass = dns.rdataclass.from_text(row.dclass)
-                q = dns.message.make_query(row.name, dtype, dclass)
+                q = dns.message.make_query(name, dtype, dclass)
                 r = dns.message.make_response(q)
                 if isflags is True:
                     r.flags = flags = dns.flags.from_text(row.flags)
-                r.answer.append(dns.rrset.from_text_list(row.name,row.ttl,dclass,dtype,row.data))
+                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
                 packet = dns.message.Message.to_wire(r)
                 key = parser(packet)
                 self.cache[key]=packet[2:]
-                puredata.append((row.name,row.ttl,dclass,dtype,row.data,flags))
+                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
         Caching.cnametoa(self, puredata)        
 
     def cnametoa(self, data, row=None, result=None):
@@ -129,7 +130,7 @@ class Caching:
                     Q = result.question[0]
                     for record in result.answer:
                         data.append({
-                            'name':record.name.to_text(),
+                            'name':record.name.to_text().encode('utf-8').decode('idna'),
                             'ttl':record.ttl,
                             'rclass': dns.rdataclass.to_text(record.rdclass),
                             'type': dns.rdatatype.to_text(record.rdtype),
