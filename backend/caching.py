@@ -16,10 +16,12 @@ from backend.accessdb import AccessDB
 try: from backend.cparser import parser
 except: from backend.parser import parser
 
-def parser(data:bytes, i:int=13):
+def parser(data:bytes, i:int=13, p=False):
     struct = data[i:]
     for t in range(struct.__len__()):
         if struct[t] == 0:
+            if p is True:
+                print(struct[:t+5], struct[:t+5].__hash__())
             return struct[:t+5].__hash__()
 
 # --- Cahe job ---
@@ -37,11 +39,12 @@ class Caching:
 
 
     def get(self, data:bytes):
+        parse = parser(data)
         for save in self.buff:
-            e = parser(save,11)
-            if e == parser(data,13): return save
+            if parse == parser(save,11):
+                return save
         #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
-        result = self.cache.get(parser(data))
+        result = self.cache.get(parse)
         if result: self.buff.add(result)
         return result
 
@@ -92,7 +95,7 @@ class Caching:
                 if one[0] == row[4][0]:
                     if one[3] is dns.rdatatype.CNAME:
                         result = Caching.cnametoa(self, data, one, result)
-                        result.append(one)
+                        if result: result.append(one)
                         return result
                     elif one[3] is dns.rdatatype.A:
                         result.append(one)
@@ -118,8 +121,7 @@ class Caching:
                         self.cache[key]=packet[2:]
 
     def upload(self):
-        try:
-            self.buff.clear()             
+        try:            
             db = AccessDB(self.engine, self.conf) # <- Init Data Base
             if self.temp:
                 data = []

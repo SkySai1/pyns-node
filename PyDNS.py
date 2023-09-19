@@ -27,16 +27,21 @@ _COUNT = 0
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
 
-    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching) -> None:
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, stat:bool=False) -> None:
         self.auth = _auth
         self.recursive = _recursive
         self.cache = _cache
+        self.stat = stat
+        self.rec = eval(_CONF['RECURSION']['enable']) 
         super().__init__()
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
         self.transport = transport
 
     def datagram_received(self, data, addr):
+        if self.stat is True:
+            global _COUNT
+            _COUNT += 1
         result = UDPserver.handle(self, data, addr)
         #UDPserver.thandle(self, data, addr)
         self.transport.sendto(result, addr)
@@ -57,8 +62,6 @@ class UDPserver(asyncio.DatagramProtocol):
 
 
     def handle(self, data:bytes, addr:tuple):
-        global _COUNT
-        _COUNT +=1
         try:
             #print(dns.message.from_wire(data).question)            
             result = self.cache.get(data)
@@ -67,8 +70,7 @@ class UDPserver(asyncio.DatagramProtocol):
                 return data[:2]+result
             else:
                 request = dns.message.from_wire(data)
-                '''result = _auth.authority(request)'''
-                if eval(_CONF['RECURSION']['enable']) is True:
+                if self.rec is True:
                     result = self.recursive.recursive(request)
                     if result and type(result) is dns.message.QueryMessage:
                         threading.Thread(target=self.cache.put, args=(result,)).start()
@@ -85,11 +87,6 @@ class UDPserver(asyncio.DatagramProtocol):
             result = dns.message.make_response(request)
             result.set_rcode(2)
             return result.to_wire(request.question[0].name)
-        try:
-            #print(f"Querie from {addr[0]}: {DNSRecord.parse(querie).questions}")
-            #print(f"Answer to {addr[0]}: {DNSRecord.parse(answer).rr}")
-            pass
-        except Exception as e: pass
 
 
 def techsock():
@@ -121,10 +118,12 @@ def newone(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching):
     transport.close()
     loop.close()
 
-def launcher(c:Pipe, CONF, _cache):
+def launcher(statiscics:Pipe, CONF, _cache):
     # -Counter-
+    stat = False
     if eval(CONF['GENERAL']['printstats']) is True:
-        threading.Thread(target=counter, args=(c,)).start()
+        threading.Thread(target=counter, args=(statiscics,)).start()
+        stat = True
 
     # -Init Classes
     _auth = Authority(CONF)
@@ -138,7 +137,20 @@ def launcher(c:Pipe, CONF, _cache):
     port = CONF['GENERAL']['listen-port']
     try:
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=newone, args=(ip, port, _auth, _recursive, _cache)).start()
+            #threading.Thread(target=newone, args=(ip, port, _auth, _recursive, _cache)).start()
+            #newone(ip, port, _auth, _recursive, _cache)
+            addr = (ip, port)
+            print(f"Core {current_process().name} Start listen to: {addr}")
+            loop = asyncio.new_event_loop()
+            listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, stat), addr, reuse_port=True)
+            transport, protocol = loop.run_until_complete(listen)
+            try:
+                loop.run_forever()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                transport.close()
+                loop.close()
     except:
         logging.exception('ERROR with listen on')
 
@@ -197,12 +209,12 @@ def handler(CONF):
             Parents = []
             Stream = []
             for i in range(cpu_count()):
-                parent, child = Pipe()
+                gather, stat = Pipe()
                 name = f'#{i}'
-                p = Process(target=launcher, args=(child, CONF, _cache), name=name)
+                p = Process(target=launcher, args=(stat, CONF, _cache), name=name)
                 p.start()
                 Stream.append(p)
-                Parents.append(parent)
+                Parents.append(gather)
             
             # -Start background worker
             Stream.append(Process(target=helper.watcher).start())
