@@ -115,8 +115,9 @@ enable = True
 - ✅ **Precache data from DB.** *Done.*
 - ✅ **Save flags in DB.** *Done.*
 - ✅ **Raise perfomance via C** *Done. Cython function*
-- 🚩 **Cache and set() clean** *Test with DB cache compare and without*
-- 🚩 **Enableable of cache upload** *Abilty to upload local cache to DB for this node*
+- ✅ **Cache and set() clean** *Added limit for 1st lvl cache (set) and timer to clean it*
+- ✅ **Sync beetwen node and database** *Upload to DB, download from DB, and pops exceeded keys from local cache*
+- 🚩 **Enableable of node's cache upload** *Abilty to upload local cache to DB for this node*
 
 ### RECURSION
 - ✅ **Recursion mechanism.** *Done.*
