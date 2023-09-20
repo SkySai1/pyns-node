@@ -136,6 +136,8 @@ enable = True
 - ✅ **Database scheme**. *Done.*
 - ✅ **Zones with domains** *Done. Foreign key one to many*
 - ✅ **Cache table** *Done.*
+- 🚩 **Nodes table with nodes groups**
+- 🚩 **Bind all rows to groups**
 
 ### FRONTEND
 - 🚩 **Domain and Cache managment form** ...
