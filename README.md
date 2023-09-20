@@ -114,6 +114,7 @@ enable = True
 - ✅ **Fast cache lookup.** *Done. set() for each fork.*
 - ✅ **Precache data from DB.** *Done.*
 - ✅ **Save flags in DB.** *Done.*
+- ✅ **Raise perfomance via C** *Done. Cython function*
 - 🚩 **Cache and set() clean** *Test with DB cache compare and without*
 - 🚩 **Enableable of cache upload** *Abilty to upload local cache to DB for this node*
 

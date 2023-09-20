@@ -27,12 +27,12 @@ _COUNT = 0
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
 
-    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, stat:bool=False) -> None:
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, stat:bool=False) -> None:
         self.auth = _auth
         self.recursive = _recursive
         self.cache = _cache
         self.stat = stat
-        self.rec = eval(_CONF['RECURSION']['enable']) 
+        self.rec = eval(CONF['RECURSION']['enable']) 
         super().__init__()
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
@@ -88,41 +88,11 @@ class UDPserver(asyncio.DatagramProtocol):
             result.set_rcode(2)
             return result.to_wire(request.question[0].name)
 
-
-def techsock():
-    try:
-        tech = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tech.bind(('127.0.0.1', 5300))
-        while True:
-            tech.listen(3)
-            conn, addr = tech.accept()
-            data = conn.recv(4096)
-            t = Tech(_CONF['init'],data,addr)
-            t.worker()
-    except KeyboardInterrupt:
-        tech.close()
-        sys.exit()
-
-def newone(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching):
-    addr = (ip, port)
-    print(f"Core {current_process().name} Start listen to: {addr}")
-    loop = asyncio.new_event_loop()
-    listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache)
-                                           , addr, reuse_port=True)
-    transport, protocol = loop.run_until_complete(listen)
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-
-    transport.close()
-    loop.close()
-
-def launcher(statiscics:Pipe, CONF, _cache):
+def launcher(statiscics:Pipe, CONF, _cache:Caching):
     # -Counter-
     stat = False
     if eval(CONF['GENERAL']['printstats']) is True:
-        threading.Thread(target=counter, args=(statiscics,)).start()
+        threading.Thread(target=counter, args=(statiscics,False)).start()
         stat = True
 
     # -Init Classes
@@ -130,8 +100,6 @@ def launcher(statiscics:Pipe, CONF, _cache):
 
     _recursive = Recursive(CONF)
 
-    global _CONF
-    _CONF = CONF # <- for asyncio class
     # -MainListener for every IP-
     ip = CONF['GENERAL']['listen-ip']
     port = CONF['GENERAL']['listen-port']
@@ -142,9 +110,10 @@ def launcher(statiscics:Pipe, CONF, _cache):
             addr = (ip, port)
             print(f"Core {current_process().name} Start listen to: {addr}")
             loop = asyncio.new_event_loop()
-            listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, stat), addr, reuse_port=True)
+            listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, CONF, stat), addr, reuse_port=True)
             transport, protocol = loop.run_until_complete(listen)
             try:
+                threading.Thread(target=_cache.debuff, daemon=True).start()
                 loop.run_forever()
             except KeyboardInterrupt:
                 pass
@@ -228,7 +197,6 @@ def handler(CONF):
 
         # -Start technical socket
         #Process(target=techsock).start()
-        techsock()
 
     except KeyboardInterrupt: pass
 

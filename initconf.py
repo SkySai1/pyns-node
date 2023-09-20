@@ -8,7 +8,7 @@ import logging
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats'],
     'AUTHORITY': [],
-    'CACHING': ['maxthreads'],
+    'CACHING': ['expire', 'limit'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname', 'timedelta', 'timesync'],
 }
@@ -34,7 +34,8 @@ def checkconf(CONF):
     try:
         eval(CONF['GENERAL']['printstats'])
         eval(CONF['RECURSION']['enable'])
-        int(CONF['CACHING']['maxthreads'])
+        float(CONF['CACHING']['expire'])
+        int(CONF['CACHING']['limit'])
         return True
     except Exception as e:
         print(e)
@@ -61,8 +62,10 @@ def deafultconf():
 
     }
     config['CACHING'] = {
-        ";Max threads at time to DB upload":None,
-        'maxthreads': 10
+        ";Time to clear of 1st lvl cache":None,
+        'expire': 5,
+        ";Max records in 1st lvl cache":None,
+        'limit': 100
     }
     config['RECURSION'] = {
         'enable': False,

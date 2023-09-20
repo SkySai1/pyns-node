@@ -16,36 +16,47 @@ from backend.accessdb import AccessDB
 try: from backend.cparser import parser
 except: from backend.parser import parser
 
-def parser(data:bytes, i:int=13, p=False):
+'''def parser(data:bytes, i:int=13, p=False):
     struct = data[i:]
     for t in range(struct.__len__()):
         if struct[t] == 0:
             if p is True:
                 print(struct[:t+5], struct[:t+5].__hash__())
-            return struct[:t+5].__hash__()
+            return struct[:t+5].__hash__()'''
+
+
 
 # --- Cahe job ---
 class Caching:
-    def __init__(self, engine, _CONF, CACHE:DictProxy, TEMP:ListProxy):
-        self.conf = _CONF
+    def __init__(self, engine, CONF, CACHE:DictProxy, TEMP:ListProxy):
+        self.conf = CONF
         self.engine = engine
-        self.refresh = int(_CONF['DATABASE']['timesync'])
+        self.refresh = int(CONF['DATABASE']['timesync'])
         self.cache = CACHE
         self.temp = TEMP
         self.state = True
         self.buff = set()
-        self.maxthreads = threading.BoundedSemaphore(int(_CONF['CACHING']['maxthreads']))
+        self.buffexp = float(CONF['CACHING']['expire'])
+        self.bufflimit = int(CONF['CACHING']['limit'])
         if self.refresh > 0: Caching.download(self)
 
+    def debuff(self):
+        while True:
+            time.sleep(self.buffexp)
+            #print(self.buff.__len__())
+            self.buff.clear()
 
     def get(self, data:bytes):
+        #print(self.buff.__len__())
         parse = parser(data,13)
         for save in self.buff:
             if parse == parser(save,11):
                 return save
         #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
         result = self.cache.get(parse)
-        if result: self.buff.add(result)
+        if result:
+            if self.buff.__len__() > self.bufflimit: self.buff.clear()
+            self.buff.add(result)
         return result
 
     def put(self, data:dns.message.Message):
