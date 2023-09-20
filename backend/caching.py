@@ -38,7 +38,6 @@ class Caching:
         self.buff = set()
         self.buffexp = float(CONF['CACHING']['expire'])
         self.bufflimit = int(CONF['CACHING']['limit'])
-        if self.refresh > 0: Caching.download(self)
 
     def debuff(self):
         while True:
@@ -74,15 +73,18 @@ class Caching:
         # --Getting all records from cache tatble
         try:
             if eval(self.conf['RECURSION']['enable']) is True:
-                cachedata = db.GetFromCache()
-                if cachedata: Caching.packing(self, cachedata, True)
-            authdata = db.GetFromDomains()
-            if authdata: Caching.packing(self, authdata)
+                keys = Caching.packing(self, db.GetFromCache() + db.GetFromDomains())
+            else:
+                keys = Caching.packing(self, db.GetFromDomains())
+        
+            for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
+            #print('L:',self.cache.__len__(), 'DB:',keys.__len__())
         except:
             logging.exception('CACHE LOAD FROM DB CACHE')
 
     def packing(self, rawdata, isflags:bool=False):
         puredata = []
+        keys = set()
         for obj in rawdata:
             for row in obj:
                 flags = ''
@@ -90,15 +92,19 @@ class Caching:
                 dtype = dns.rdatatype.from_text(row.type)
                 dclass = dns.rdataclass.from_text(row.dclass)
                 q = dns.message.make_query(name, dtype, dclass)
-                r = dns.message.make_response(q)
-                if isflags is True:
-                    r.flags = flags = dns.flags.from_text(row.flags)
-                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-                packet = dns.message.Message.to_wire(r)
-                key = parser(packet)
-                self.cache[key]=packet[2:]
-                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
-        Caching.cnametoa(self, puredata)        
+                key = parser(q.to_wire())
+                keys.add(key)
+                if not key in self.cache:
+                    r = dns.message.make_response(q)
+                    if hasattr(row, 'flags'):
+                        r.flags = flags = dns.flags.from_text(row.flags)
+                    r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+                    packet = dns.message.Message.to_wire(r)
+                    self.cache[key]=packet[2:]
+                    puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
+        #self.cache = cache
+        Caching.cnametoa(self, puredata)
+        return keys        
 
     def cnametoa(self, data, row=None, result=None):
         if row:

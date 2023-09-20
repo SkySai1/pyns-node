@@ -27,6 +27,7 @@ class Helper:
             while True:
                 db.CacheExpired(expired=getnow(self.timedelta, 0))
                 self.cache.upload()
+                self.cache.download()
                 time.sleep(self.sync)
         except:
             logging.exception('Uncache:')
