@@ -64,23 +64,24 @@ class UDPserver(asyncio.DatagramProtocol):
     def handle(self, data:bytes, addr:tuple):
         try:
             #print(dns.message.from_wire(data).question)            
-            result = self.cache.get(data)
-            if result: 
-                #print(dns.message.from_wire(data[:2]+result).question[0].name, 'returned from cache')
-                return data[:2]+result
+            result = self.cache.get(data) # <- Try to take data from Cache
+            if result: return data[:2]+result
+
+            result = self.auth.get(data) # <- Try to take data from Authoirty
+            if result: return data[:2]+result
+
+
+            if self.rec is True:
+                result = self.recursive.recursive(data)
+                if result and type(result) is dns.message.QueryMessage:
+                    threading.Thread(target=self.cache.put, args=(result,)).start()
+                    return result.to_wire()
+                    pass
             else:
                 request = dns.message.from_wire(data)
-                if self.rec is True:
-                    result = self.recursive.recursive(request)
-                    if result and type(result) is dns.message.QueryMessage:
-                        threading.Thread(target=self.cache.put, args=(result,)).start()
-                        return result.to_wire(request.question[0].name)
-                        pass
-                else:
-                    request = dns.message.from_wire(data)
-                    result = dns.message.make_response(request)
-                    result.set_rcode(5)
-                    return result.to_wire(request.question[0].name)
+                result = dns.message.make_response(request)
+                result.set_rcode(5)
+                return result.to_wire(request.question[0].name)
         except:
             logging.exception('UDP HANDLE')
             request = dns.message.from_wire(data)

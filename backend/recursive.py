@@ -59,32 +59,33 @@ class Recursive:
         except:
             logging.exception('ERROR with recursive init')
 
-    def recursive(self, query:dns.message.Message):
+    def recursive(self, data:bytes):
         # - External resolving if specify external DNS server
-        if self.resolver:
-            result = Recursive.extresolve(self, self.resolver, query)
-            return result, None
-        else:
+        try:
+            query = dns.message.from_wire(data)
+            if self.resolver:
+                result = Recursive.extresolve(self, self.resolver, query)
+                return result, None
             # - Internal resolving if it is empty
-            try:
-                random.shuffle(_ROOT)
-                global depth
-                for i in range(3):
-                    depth = 0
-                    result,_ = Recursive.resolve(self, query, _ROOT[i])
-                    if type(result) is dns.message.QueryMessage: break
-                if result and dns.flags.AA in result.flags and not result.answer: 
-                    result.set_rcode(3)
-                if not result: 
-                    result = dns.message.make_response(query)
-                    result.set_rcode(2)
-                #result.flags += dns.flags.RA
-                return  result# <- In anyway returns byte's packet and DNS Record data
-            except: # <-In any troubles at process resolving returns request with SERVFAIL code
-                logging.exception(f'Stage: Recursive: {query.question}')
+
+            random.shuffle(_ROOT)
+            global depth
+            for i in range(3):
+                depth = 0
+                result,_ = Recursive.resolve(self, query, _ROOT[i])
+                if type(result) is dns.message.QueryMessage: break
+            if result and dns.flags.AA in result.flags and not result.answer: 
+                result.set_rcode(3)
+            if not result: 
                 result = dns.message.make_response(query)
                 result.set_rcode(2)
-                return result
+            #result.flags += dns.flags.RA
+            return  result# <- In anyway returns byte's packet and DNS Record data
+        except: # <-In any troubles at process resolving returns request with SERVFAIL code
+            logging.exception(f'Stage: Recursive: {query.question}')
+            result = dns.message.make_response(query)
+            result.set_rcode(2)
+            return result
 
     def resolve(self, query:dns.message.QueryMessage, ns):
         # -Checking current recursion depth-
