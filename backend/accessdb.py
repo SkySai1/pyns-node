@@ -118,8 +118,10 @@ class AccessDB:
         with Session(self.engine) as conn:
             try:
                 if not name:
-                    stmt = select(Zones)
-                    result = conn.execute(stmt).fetchall()
+                    stmt = (select(Zones, Domains).join(Domains)
+                            .filter(Domains.type == 'SOA')
+                            )
+                    result = conn.execute(stmt).all()
                 else:
                     stmt = select(Zones).filter(Zones.name == name)
                     result = conn.execute(stmt).fetchone()
@@ -129,17 +131,17 @@ class AccessDB:
                 return None
 
     # -- Get from Domains
-    def GetFromDomains(self, qname = None, qclass = None, qtype = None):
+    def GetFromDomains(self, qname = None, qclass = 'IN', qtype = None, zone=None):
         #if type(qtype) is not list: qtype = [qtype]
         with Session(self.engine) as conn:
-            if not qname and not qclass and not qtype:
+            if zone:
+                stmt = (select(Domains).join(Zones).filter(Zones.name == zone))
+                return conn.execute(stmt).all()
+            
+            if not qname and not qtype:
                 result = conn.execute(select(Domains)).fetchall()
                 return result
-            stmt = (select(Zones)
-                    .filter(Zones.name.in_(qname.split('.')))
 
-            )
-            result = conn.execute(stmt).fetchall()
             #for obj in result: print(obj)
             if not qtype:
                 stmt = (select(Domains)

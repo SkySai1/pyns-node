@@ -75,6 +75,7 @@ def zonecreator():
                 "ttl": data['ttl'],
                 "dclass": 'IN',
                 "type": 'SOA',
+                #"data": [data['NS'], data['email'], data['serial'], data['refresh'], data['retry'], data['expire'], data['ttl']]
                 "data": [rdata]
             }
             Z.zonefilling([soa])
@@ -128,6 +129,7 @@ def printzones():
                     t.add_row([row.id, row.name, row.type])
                 except:
                     logging.exception('zone table')
+                break
         print(t)
     action = int(input("Choose action:\n 0. Return to back\n 1. Create new zone\n"))
     selectel(action, [MainMenu, zonecreator])

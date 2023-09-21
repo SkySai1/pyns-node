@@ -68,15 +68,14 @@ class UDPserver(asyncio.DatagramProtocol):
             if result: return data[:2]+result
 
             result = self.auth.get(data) # <- Try to take data from Authoirty
-            if result: return data[:2]+result
-
+            if result: 
+                return result
 
             if self.rec is True:
                 result = self.recursive.recursive(data)
-                if result and type(result) is dns.message.QueryMessage:
+                if result:
                     threading.Thread(target=self.cache.put, args=(result,)).start()
-                    return result.to_wire()
-                    pass
+                    return result
             else:
                 request = dns.message.from_wire(data)
                 result = dns.message.make_response(request)
@@ -89,15 +88,12 @@ class UDPserver(asyncio.DatagramProtocol):
             result.set_rcode(2)
             return result.to_wire(request.question[0].name)
 
-def launcher(statiscics:Pipe, CONF, _cache:Caching):
+def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     # -Counter-
     stat = False
     if eval(CONF['GENERAL']['printstats']) is True:
         threading.Thread(target=counter, args=(statiscics,False)).start()
         stat = True
-
-    # -Init Classes
-    _auth = Authority(CONF)
 
     _recursive = Recursive(CONF)
 
@@ -172,8 +168,10 @@ def handler(CONF):
     try: 
         with Manager() as manager:
             # -Init Classes
-            _cache = Caching(enginer(CONF), CONF, manager.dict(), manager.list())
-            helper = Helper(enginer(CONF), CONF, _cache)
+            
+            _cache = Caching(CONF, manager.dict(), manager.list())
+            _auth = Authority(CONF, manager.dict(), manager.list())
+            helper = Helper(CONF, _cache, _auth)
 
             # -Start server for each core-
             Parents = []
@@ -181,7 +179,7 @@ def handler(CONF):
             for i in range(cpu_count()):
                 gather, stat = Pipe()
                 name = f'#{i}'
-                p = Process(target=launcher, args=(stat, CONF, _cache), name=name)
+                p = Process(target=launcher, args=(stat, CONF, _cache, _auth), name=name)
                 p.start()
                 Stream.append(p)
                 Parents.append(gather)

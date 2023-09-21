@@ -12,7 +12,7 @@ import dns.name
 import dns.flags
 import binascii
 from backend.recursive import QTYPE, CLASS
-from backend.accessdb import AccessDB
+from backend.accessdb import AccessDB, getnow
 try: from backend.cparser import parser
 except: from backend.parser import parser
 
@@ -23,14 +23,33 @@ except: from backend.parser import parser
             if p is True:
                 print(struct[:t+5], struct[:t+5].__hash__())
             return struct[:t+5].__hash__()'''
-
-
+def packing(cache, rawdata, isflags:bool=False):
+    puredata = []
+    keys = set()
+    for obj in rawdata:
+        for row in obj:
+            flags = ''
+            name = row.name.encode('idna').decode('utf-8')
+            dtype = dns.rdatatype.from_text(row.type)
+            dclass = dns.rdataclass.from_text(row.dclass)
+            q = dns.message.make_query(name, dtype, dclass)
+            key = parser(q.to_wire())
+            keys.add(key)
+            if not key in cache:
+                r = dns.message.make_response(q)
+                if hasattr(row, 'flags'):
+                    r.flags = flags = dns.flags.from_text(row.flags)
+                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+                packet = dns.message.Message.to_wire(r)
+                cache[key]=packet[2:]
+                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
+    Caching.cnametoa(cache, puredata)
+    return keys, cache  
 
 # --- Cahe job ---
 class Caching:
-    def __init__(self, engine, CONF, CACHE:DictProxy, TEMP:ListProxy):
+    def __init__(self, CONF, CACHE:DictProxy, TEMP:ListProxy):
         self.conf = CONF
-        self.engine = engine
         self.refresh = int(CONF['DATABASE']['timesync'])
         self.cache = CACHE
         self.temp = TEMP
@@ -38,6 +57,7 @@ class Caching:
         self.buff = set()
         self.buffexp = float(CONF['CACHING']['expire'])
         self.bufflimit = int(CONF['CACHING']['limit'])
+        self.timedelta = int(CONF['DATABASE']['timedelta'])
 
     def debuff(self):
         while True:
@@ -58,61 +78,37 @@ class Caching:
             self.buff.add(result)
         return result
 
-    def put(self, data:dns.message.Message):
-        #print(self.cache.keys())
-        packet = data.to_wire()
-        key = parser(packet)
+    def put(self, data:bytes):
+        key = parser(data)
+        result = dns.message.from_wire(data)
         if not key in self.cache and self.refresh > 0:
-            self.cache[key] = packet[2:]
-            #print(f'{datetime.datetime.now()}: {data.question[0].to_text()} was cached as {key}')
-            if data.rcode() is dns.rcode.NOERROR:
-                self.temp.append(data)
+            self.cache[key] = data[2:]
+            if result.rcode() is dns.rcode.NOERROR:
+                self.temp.append(result)
             
-    def download(self):
-        db = AccessDB(self.engine, self.conf)
+    def download(self, engine):
+        db = AccessDB(engine, self.conf)
         # --Getting all records from cache tatble
         try:
-            if eval(self.conf['RECURSION']['enable']) is True:
-                keys = Caching.packing(self, db.GetFromCache() + db.GetFromDomains())
+            if self.conf['RECURSION']['enable'] is True:
+                keys,_ = packing(self.cache, db.GetFromDomains())
             else:
-                keys = Caching.packing(self, db.GetFromDomains())
-        
+                keys,_= packing(self.cache, db.GetFromDomains() + db.GetFromCache())
             for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
             #print('L:',self.cache.__len__(), 'DB:',keys.__len__())
         except:
             logging.exception('CACHE LOAD FROM DB CACHE')
 
-    def packing(self, rawdata, isflags:bool=False):
-        puredata = []
-        keys = set()
-        for obj in rawdata:
-            for row in obj:
-                flags = ''
-                name = row.name.encode('idna').decode('utf-8')
-                dtype = dns.rdatatype.from_text(row.type)
-                dclass = dns.rdataclass.from_text(row.dclass)
-                q = dns.message.make_query(name, dtype, dclass)
-                key = parser(q.to_wire())
-                keys.add(key)
-                if not key in self.cache:
-                    r = dns.message.make_response(q)
-                    if hasattr(row, 'flags'):
-                        r.flags = flags = dns.flags.from_text(row.flags)
-                    r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-                    packet = dns.message.Message.to_wire(r)
-                    self.cache[key]=packet[2:]
-                    puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
         #self.cache = cache
-        Caching.cnametoa(self, puredata)
-        return keys        
+      
 
-    def cnametoa(self, data, row=None, result=None):
+    def cnametoa(cache, data, row=None, result=None):
         if row:
             #print(row)
             for one in data: 
                 if one[0] == row[4][0]:
                     if one[3] is dns.rdatatype.CNAME:
-                        result = Caching.cnametoa(self, data, one, result)
+                        result = Caching.cnametoa(cache, data, one, result)
                         if result: result.append(one)
                         return result
                     elif one[3] is dns.rdatatype.A:
@@ -123,7 +119,7 @@ class Caching:
             for one in data:
                 if one[3] is dns.rdatatype.CNAME:
                     result = []
-                    result = Caching.cnametoa(self, data, one, result)
+                    result = Caching.cnametoa(cache, data, one, result)
                     if result:
                         q = dns.message.make_query(one[0], 'A', one[2])
                         r = dns.message.make_response(q)
@@ -136,11 +132,12 @@ class Caching:
                             ))
                         packet = dns.message.Message.to_wire(r)
                         key = parser(packet)
-                        self.cache[key]=packet[2:]
+                        cache[key]=packet[2:]
 
-    def upload(self):
+    def upload(self, engine):
         try:            
-            db = AccessDB(self.engine, self.conf) # <- Init Data Base
+            db = AccessDB(engine, self.conf) # <- Init Data Base
+            db.CacheExpired(expired=getnow(self.timedelta, 0))
             if self.temp:
                 data = []
                 for result in self.temp:

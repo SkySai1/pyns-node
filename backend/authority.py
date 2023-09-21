@@ -1,56 +1,58 @@
+import logging
+from multiprocessing.managers import DictProxy, ListProxy
 from sqlalchemy import create_engine
 from backend.accessdb import AccessDB
+from backend.caching import packing
 import dns.message
 import dns.rrset
 import dns.flags
 import dns.name
-#from caching import Caching
+import dns.rcode
+try: from backend.cparser import parser
+except: from backend.parser import parser
+
+
+def fakezone(query:dns.message.Message, zone, soa, ttl):
+        response = dns.message.make_response(query)
+        record = dns.rrset.from_text(zone,int(ttl),'IN','SOA', soa)
+        response.authority.append(record)
+        response.flags += dns.flags.AA
+        response.set_rcode(dns.rcode.NXDOMAIN)
+        return response.to_wire()
 
 class Authority:
 
-    def __init__(self, conf):
+    def __init__(self, conf, auth:DictProxy, zones:ListProxy):
         self.conf = conf
+        self.auth = auth
+        self.zones = zones
 
-    def authority(self, rdata):    
-        '''        result, auth = Authority.resolve(self, rdata)
-        answer = dns.message.make_response(rdata)
-        if result or auth:
-            answer.origin = rdata.question[0].name
-            if result: answer = makeanswer(answer,result, 0)  
-            elif auth: answer = makeanswer(answer,auth, 1)                                           
-            answer.flags += dns.flags.AA
-        else: # <- if server didn't know about qname it will try to resolve it'''
-        answer = dns.message.make_response(rdata)
-        answer.set_rcode(3)
-        return answer
+    def get(self, data:bytes):
+        hkey = parser(data)
+        query = dns.message.from_wire(data)
+        qname = query.question[0].name.to_text()
+        hit = []
+        for e in self.zones:
+            if e[0] in qname:
+                hit.append(e) 
+        if hit:
+            result = fakezone(query, hit[-1][0], hit[-1][1], hit[-1][2])
+            self.auth[hkey]=result[2:]
+            return data[:2]+result[2:]
+        return None
 
-    def resolve(self, data:dns.message.Message):
-        if data.question:
-            rr = data.question[-1].to_text().split(' ')
-            db = AccessDB(self.engine, self.conf)
-            Q = {}
-            Q['name'] = rr[0].lower()
-            Q['class'] = rr[1].upper()
-            Q['type'] = rr[2].upper()
-            auth = None
-            result = db.GetFromDomains(Q['name'], Q['class'], Q['type']) # <- Get RR from Domain Table
-            if not result:
-                result = db.GetFromCache(Q['name'], Q['class'], Q['type'])
-            if not result: # <- if not exists required RR type then return authority list
-                auth = db.GetFromDomains(Q['name'], Q['class'], 'NS') # <- Check Authority
-            return result, auth
-    
-def makeanswer(answer:dns.message.Message, dbresult, type = None):
-    """
-    type 0 - for auth section
-    type 1 - for additional section
-    """
-    for obj in dbresult:
-        for row in obj:
-            record = dns.rrset.from_text(str(row.name), int(row.ttl), str(row.dclass), str(row.type), str(row.data))
-            if not record: break
-            if type == 0:
-                answer.answer.append(record)
-            if type == 1:
-                answer.additional.append(record)
-    return answer
+
+
+    def download(self, engine):
+        db = AccessDB(engine, self.conf)
+        # --Getting all records from cache tatble
+        try:
+            [self.zones.pop(0) for i in range(self.zones.__len__())]
+            #print([rr.name for obj in db.getZones() for rr in obj])
+            [self.zones.append((obj[0].name, obj[1].data[0], obj[1].ttl)) for obj in db.getZones()]
+            '''for zone in self.zones:
+                zone = zone[0]
+                self.auth[zone] = {}    
+                keys, self.auth[zone] = packing({}, db.GetFromDomains(zone=zone))'''
+        except:
+            logging.exception('CACHE LOAD FROM DB CACHE')

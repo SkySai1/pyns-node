@@ -127,7 +127,9 @@ enable = True
 
 ### AUTHORITY
 - ✅ **Keep DNS domains in DB.** *Done.*
-- ✅ **Get zones via trasnsfer** *Done. With TSIG and without*
+- ✅ **Get zones via trasnsfer.** *Done. With TSIG and without*
+- ✅ **Download domains to 2nd lvl cache** *Done.*
+- 🚩 **Made authority packing with Authoriry and Additional Sections** *For existing domain, if domain is not exist made authority with single SOA record*
 - 🚩 **Return zones via transfer** ...
 - 🚩 **Politics and settings for zones** ... 
 - 🚩 **TSIG keeping with zones binding** ...

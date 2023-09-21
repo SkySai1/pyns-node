@@ -80,12 +80,12 @@ class Recursive:
                 result = dns.message.make_response(query)
                 result.set_rcode(2)
             #result.flags += dns.flags.RA
-            return  result# <- In anyway returns byte's packet and DNS Record data
+            return  result.to_wire()# <- In anyway returns byte's packet and DNS Record data
         except: # <-In any troubles at process resolving returns request with SERVFAIL code
             logging.exception(f'Stage: Recursive: {query.question}')
             result = dns.message.make_response(query)
             result.set_rcode(2)
-            return result
+            return result.to_wire()
 
     def resolve(self, query:dns.message.QueryMessage, ns):
         # -Checking current recursion depth-

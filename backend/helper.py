@@ -2,32 +2,39 @@ import threading
 import time
 import logging
 
-from backend.accessdb import AccessDB, getnow
+from backend.accessdb import AccessDB, enginer
 from backend.caching import Caching
+from backend.authority import Authority
 
 class Helper:
 
-    def __init__(self, engine, CONF, CACHE:Caching) -> None:
-        self.engine = engine
+    def __init__(self, CONF, CACHE:Caching, AUTH:Authority) -> None:
         self.conf = CONF
         self.cache = CACHE
-        self.timedelta = int(CONF['DATABASE']['timedelta'])
+        self.auth = AUTH
         self.sync = float(CONF['DATABASE']['timesync'])
 
     def watcher(self):
-        db = AccessDB(self.engine, self.conf)
         try:
-            threading.Thread(target=Helper.cacheupdate, args=(self, db)).start()
+            threading.Thread(target=Helper.cacheupdate, args=(self, enginer(self.conf))).start()
+            threading.Thread(target=Helper.domainupdate, args=(self, enginer(self.conf))).start()
             pass
         except KeyboardInterrupt: 
             pass
 
-    def cacheupdate(self, db:AccessDB):
+    def cacheupdate(self, engine:enginer):
         try:
             while True:
-                db.CacheExpired(expired=getnow(self.timedelta, 0))
-                self.cache.upload()
-                self.cache.download()
+                self.cache.upload(engine)
+                self.cache.download(engine)
+                time.sleep(self.sync)
+        except:
+            logging.exception('Uncache:')
+
+    def domainupdate(self, engine:enginer):
+        try:
+            while True:
+                self.auth.download(engine)
                 time.sleep(self.sync)
         except:
             logging.exception('Uncache:')
