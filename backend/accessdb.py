@@ -60,6 +60,7 @@ class Zones(Base):
     type = Column(String, default='master')
 
     rules = relationship("Rules", secondary="zones_rules", back_populates="zones", cascade='delete')
+    tsigkeys = relationship("Tkeys", secondary="zones_tsigkeys", back_populates="zones", cascade='delete')
 
 class Cache(Base):  
     __tablename__ = "cache" 
@@ -89,6 +90,20 @@ class Join_ZonesRules(Base):
     zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'))
     rule_id = Column(Integer, ForeignKey('rules.id', ondelete='cascade'))
     value = Column(Text, nullable=False)
+
+class Tkeys(Base):
+    __tablename__ = "tsigkeys"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    value = Column(String(255), nullable=False) 
+    zones = relationship("Zones", secondary="zones_tsigkeys", back_populates="tsigkeys", cascade='delete', single_parent=True)
+
+
+class Join_ZonesTkeys(Base):
+    __tablename__ = "zones_tsigkeys"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'))
+    tkey_id = Column(Integer, ForeignKey('tsigkeys.id', ondelete='cascade'))
 
 class AccessDB:
 
