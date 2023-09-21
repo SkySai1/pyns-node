@@ -57,26 +57,29 @@ def zonecreator():
             "type": 'SOA',
             "data": rdata
             }
-        Z = Zonemaker(_CONF['init'])
+        Z = Zonemaker(_CONF)
         id = Z.zonecreate(data)
-        rdata = ' '.join([
-            data['NS'], 
-            data['email'], 
-            str(data['serial']), 
-            str(data['refresh']),
-            str(data['retry']),
-            str(data['expire']),
-            str(data['ttl'])
-             ])
-        soa = {
-            "zone_id": id,
-            "name": data['name'],
-            "ttl": data['ttl'],
-            "dclass": 'IN',
-            "type": 'SOA',
-            "data": rdata
-        }
-        Z.zonefilling(soa)
+        if id is not False:
+            rdata = ' '.join([
+                data['NS'], 
+                data['email'], 
+                str(data['serial']), 
+                str(data['refresh']),
+                str(data['retry']),
+                str(data['expire']),
+                str(data['ttl'])
+                ])
+            soa = {
+                "zone_id": id,
+                "name": data['name'],
+                "ttl": data['ttl'],
+                "dclass": 'IN',
+                "type": 'SOA',
+                "data": [rdata]
+            }
+            Z.zonefilling([soa])
+        else:
+            print('Zone already exist')
     if data['type'] == 'slave':
         data['master'] = inputer("- Specify IP of master:\n",str)
         data['tsig'] = inputer("- Specify TSIG key (hex value) if you need it (none by default):\n",str, None)

@@ -8,7 +8,6 @@ class Zonemaker:
     def zonecreate(self, zone):
         db = AccessDB(self.engine, self.conf)
         id = db.ZoneCreate(zone)
-        if id is False: return False
         return id
     
     def zonepolicy(self, zone_id, data):
@@ -17,4 +16,4 @@ class Zonemaker:
     
     def zonefilling(self, data):
         db = AccessDB(self.engine, self.conf)
-        db.NewDomains(data)
+        state = db.NewDomains(data)

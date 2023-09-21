@@ -265,8 +265,11 @@ class AccessDB:
 
     def NewDomains(self, data:list):
         with Session(self.engine) as conn:
-            #stmt = insert(Domains).
             try:
+                for rr in data:
+                    if rr['type'] == ('SOA' or 'CNAME'):
+                        if AccessDB.GetFromDomains(self,rr['name'],rr['dclass'],rr['type']):
+                            return False
                 conn.execute(insert(Domains), data)
                 conn.commit()
             except:
