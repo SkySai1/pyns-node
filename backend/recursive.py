@@ -99,7 +99,7 @@ class Recursive:
         except:
             result = dns.message.make_response(query)
             result.set_rcode(5)
-            logging.exception(f'Resolve: #1, qname - {result.question[0].name}')
+            #logging.exception(f'Resolve: #1, qname - {result.question[0].name}')
             return result, ns
         
         # -Trying to get answer from specifing nameserver-
@@ -132,7 +132,7 @@ class Recursive:
                 if ipaddress.ip_address(ns).version == 4:
                     result, ns = Recursive.resolve(self,query, ns)
                     if result and result.rcode() in [
-                        dns.rcode.NOERROR]: return result, ns
+                        dns.rcode.NOERROR, dns.rcode.REFUSED]: return result, ns
             return None, ns
 
         elif result.authority:
@@ -142,17 +142,18 @@ class Recursive:
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
                         nsdata, _ = Recursive.resolve(self, nsquery, ns)
-                        if nsdata.rcode() is dns.rcode.REFUSED: break
-                        if not dns.rcode.NOERROR == nsdata.rcode():
-                            continue
-                        if nsdata.answer:
-                            for rr in nsdata.answer:
-                                ns = str(rr[0])
-                                if ipaddress.ip_address(ns).version == 4:
-                                    result, ns = Recursive.resolve(self, query, ns)
-                                if result and result.rcode() in [
-                                    dns.rcode.NOERROR]: return result, ns
-                            return None, ns
+                        if nsdata:
+                            if not nsdata.rcode() in [
+                            dns.rcode.NOERROR, dns.rcode.REFUSED]:
+                                continue
+                            if nsdata.answer:
+                                for rr in nsdata.answer:
+                                    ns = str(rr[0])
+                                    if ipaddress.ip_address(ns).version == 4:
+                                        result, ns = Recursive.resolve(self, query, ns)
+                                    if result and result.rcode() in [
+                                        dns.rcode.NOERROR, dns.rcode.REFUSED]: return result, ns
+                                return None, ns
         return None, ns
 
     def extresolve(self, resolver, query):
