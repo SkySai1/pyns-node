@@ -34,34 +34,34 @@ def packing(cache, rawdata):
             if hasattr(row, 'flags'):
                 r.flags = flags = dns.flags.from_text(row.flags)
             r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-            #if obj.__len__() == 2: r = addauth(r, rawdata) # <- Доработка
+            if obj.__len__() == 2: r = addauth(r, rawdata, obj[1].name, row.name) # <- Доработка
             packet = dns.message.Message.to_wire(r)
             cache[key]=packet[2:]
             puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
     cnametoa(cache, puredata)
     return keys, cache  
 
-def addauth(r:dns.message.Message, rawdata):
-    authority = []
-    name = None
+def addauth(r:dns.message.Message, rawdata, origin, fqdn):
+    auth = []
     for obj in rawdata: 
         row = obj[0]
         if row.type == 'NS':
-            if re.match(f"{re.escape(r.question[0].name.to_text())}$",row.name):
-                name = row.name.encode('idna').decode('utf-8')
+            if fqdn == row.name:
+            #if re.match(f"^{re.escape(origin)}$",row.name):
                 r.authority = rrsetmaker(r.authority,row)
-                authority.append(row.data)
-    if not name:
+                auth.append(row.data[0])
+    if not auth:
         for obj in rawdata:
             row = obj[0]
             if row.type == 'NS':
-                if re.match(f"{re.escape(obj[1].name)}$",row.name):
+                if obj[1].name == origin == row.name:
+                #if re.match(f"^{re.escape(obj[1].name)}$",row.name):
                     r.authority = rrsetmaker(r.authority,row)
-                    authority.append(row.data)
-    if authority:
+                    auth.append(row.data[0])
+    if auth:
         for obj in rawdata:
             row = obj[0]
-            if row.name in authority[0] and row.type == 'A':
+            if row.name in auth and row.type == 'A' and row.name != fqdn:
                 r.additional = rrsetmaker(r.additional, row)
     return r
 
