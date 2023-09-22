@@ -1,6 +1,7 @@
 import datetime
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
+import re
 import threading
 import time
 import dns.message
@@ -16,35 +17,92 @@ from backend.accessdb import AccessDB, getnow
 try: from backend.cparser import parser
 except: from backend.parser import parser
 
-'''def parser(data:bytes, i:int=13, p=False):
-    struct = data[i:]
-    for t in range(struct.__len__()):
-        if struct[t] == 0:
-            if p is True:
-                print(struct[:t+5], struct[:t+5].__hash__())
-            return struct[:t+5].__hash__()'''
-def packing(cache, rawdata, isflags:bool=False):
+def packing(cache, rawdata):
     puredata = []
     keys = set()
     for obj in rawdata:
-        for row in obj:
-            flags = ''
-            name = row.name.encode('idna').decode('utf-8')
-            dtype = dns.rdatatype.from_text(row.type)
-            dclass = dns.rdataclass.from_text(row.dclass)
-            q = dns.message.make_query(name, dtype, dclass)
-            key = parser(q.to_wire())
-            keys.add(key)
-            if not key in cache:
-                r = dns.message.make_response(q)
-                if hasattr(row, 'flags'):
-                    r.flags = flags = dns.flags.from_text(row.flags)
-                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-                packet = dns.message.Message.to_wire(r)
-                cache[key]=packet[2:]
-                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
-    Caching.cnametoa(cache, puredata)
+        row = obj[0]
+        flags = ''
+        name = row.name.encode('idna').decode('utf-8')
+        dtype = dns.rdatatype.from_text(row.type)
+        dclass = dns.rdataclass.from_text(row.dclass)
+        q = dns.message.make_query(name, dtype, dclass)
+        key = parser(q.to_wire())
+        keys.add(key)
+        if not key in cache:
+            r = dns.message.make_response(q)
+            if hasattr(row, 'flags'):
+                r.flags = flags = dns.flags.from_text(row.flags)
+            r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+            #if obj.__len__() == 2: r = addauth(r, rawdata) # <- Доработка
+            packet = dns.message.Message.to_wire(r)
+            cache[key]=packet[2:]
+            puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
+    cnametoa(cache, puredata)
     return keys, cache  
+
+def addauth(r:dns.message.Message, rawdata):
+    authority = []
+    name = None
+    for obj in rawdata: 
+        row = obj[0]
+        if row.type == 'NS':
+            if re.match(f"{re.escape(r.question[0].name.to_text())}$",row.name):
+                name = row.name.encode('idna').decode('utf-8')
+                r.authority = rrsetmaker(r.authority,row)
+                authority.append(row.data)
+    if not name:
+        for obj in rawdata:
+            row = obj[0]
+            if row.type == 'NS':
+                if re.match(f"{re.escape(obj[1].name)}$",row.name):
+                    r.authority = rrsetmaker(r.authority,row)
+                    authority.append(row.data)
+    if authority:
+        for obj in rawdata:
+            row = obj[0]
+            if row.name in authority[0] and row.type == 'A':
+                r.additional = rrsetmaker(r.additional, row)
+    return r
+
+def rrsetmaker(section, row):
+    name = row.name.encode('idna').decode('utf-8')
+    dtype = dns.rdatatype.from_text(row.type)
+    dclass = dns.rdataclass.from_text(row.dclass)
+    section.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+    return section
+
+def cnametoa(cache, data, row=None, result=None):
+    if row:
+        #print(row)
+        for one in data: 
+            if one[0] == row[4][0]:
+                if one[3] is dns.rdatatype.CNAME:
+                    result = cnametoa(cache, data, one, result)
+                    if result: result.append(one)
+                    return result
+                elif one[3] is dns.rdatatype.A:
+                    result.append(one)
+                    return result
+                return None
+    else:
+        for one in data:
+            if one[3] is dns.rdatatype.CNAME:
+                result = []
+                result = cnametoa(cache, data, one, result)
+                if result:
+                    q = dns.message.make_query(one[0], 'A', one[2])
+                    r = dns.message.make_response(q)
+                    if one[5]:
+                        r.flags = one[5]
+                    result.reverse()
+                    for rr in result: 
+                        r.answer.append(dns.rrset.from_text_list(
+                            rr[0],rr[1],rr[2],rr[3],rr[4]
+                        ))
+                    packet = dns.message.Message.to_wire(r)
+                    key = parser(packet)
+                    cache[key]=packet[2:]
 
 # --- Cahe job ---
 class Caching:
@@ -101,38 +159,6 @@ class Caching:
 
         #self.cache = cache
       
-
-    def cnametoa(cache, data, row=None, result=None):
-        if row:
-            #print(row)
-            for one in data: 
-                if one[0] == row[4][0]:
-                    if one[3] is dns.rdatatype.CNAME:
-                        result = Caching.cnametoa(cache, data, one, result)
-                        if result: result.append(one)
-                        return result
-                    elif one[3] is dns.rdatatype.A:
-                        result.append(one)
-                        return result
-                    return None
-        else:
-            for one in data:
-                if one[3] is dns.rdatatype.CNAME:
-                    result = []
-                    result = Caching.cnametoa(cache, data, one, result)
-                    if result:
-                        q = dns.message.make_query(one[0], 'A', one[2])
-                        r = dns.message.make_response(q)
-                        if one[5]:
-                            r.flags = one[5]
-                        result.reverse()
-                        for rr in result: 
-                            r.answer.append(dns.rrset.from_text_list(
-                                rr[0],rr[1],rr[2],rr[3],rr[4]
-                            ))
-                        packet = dns.message.Message.to_wire(r)
-                        key = parser(packet)
-                        cache[key]=packet[2:]
 
     def upload(self, engine):
         try:            

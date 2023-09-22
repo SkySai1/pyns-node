@@ -139,7 +139,7 @@ class AccessDB:
                 return conn.execute(stmt).all()
             
             if not qname and not qtype:
-                result = conn.execute(select(Domains)).fetchall()
+                result = conn.execute(select(Domains, Zones).join(Zones)).fetchall()
                 return result
 
             #for obj in result: print(obj)

@@ -40,36 +40,43 @@ class Transfer:
 
     def getaxfr(self):
         try:
-            
+            if self.tsig:
+                key = dns.tsigkeyring.from_text({self.keyname:self.tsig})
+            else:
+                key = None
             qname = dns.name.from_text(self.zone)
-            xfr = dns.message.make_query(qname, 'AXFR', 'IN')
             try:
-                if self.tsig:
-                    key = dns.tsigkeyring.from_text({self.keyname:self.tsig})
-                    xfr.use_tsig(key, self.keyname)
-                response = dns.query.tcp(xfr, self.target)
+                xfr = dns.query.xfr(
+                    self.target,
+                    self.zone,
+                    port=53,
+                    keyring=key,
+                    relativize=False
+                )
+                response = [data for data in xfr]
             except (dns.tsig.PeerBadKey):
                 return False, 'The host doesn\'t knows about this key (bad keyname)'
-            
             except:
                 logging.exception('TRANSFER')
             Z = Zonemaker(self.conf)
-            if response and response.answer:
-                data = []
-                soa = response.answer[0][0]
+            if response:
+                soa = response[0].answer[0][0]
                 id = Z.zonecreate({
-                    'name' : response.question[0].name.to_text(),
+                    'name' : response[0].question[0].name.to_text(),
                     'type' : 'slave'
                 })
-                for record in response.answer:
-                    data.append({
-                        'zone_id': id,
-                        'name':record.name.to_text(),
-                        'ttl':record.ttl,
-                        'dclass': dns.rdataclass.to_text(record.rdclass),
-                        'type': dns.rdatatype.to_text(record.rdtype),
-                        'data':[rr.to_text() for rr in record]
-                    })
+                data = []
+                for part in response:
+                        if part and part.answer:
+                            for record in part.answer[:-1]:
+                                data.append({
+                                    'zone_id': id,
+                                    'name':record.name.to_text(),
+                                    'ttl':record.ttl,
+                                    'dclass': dns.rdataclass.to_text(record.rdclass),
+                                    'type': dns.rdatatype.to_text(record.rdtype),
+                                    'data':[rr.to_text() for rr in record]
+                                })
 
                 Z.zonefilling(data)
                 policy = {
