@@ -118,9 +118,7 @@ class AccessDB:
         with Session(self.engine) as conn:
             try:
                 if not name:
-                    stmt = (select(Zones, Domains).join(Domains)
-                            .filter(Domains.type == 'SOA')
-                            )
+                    stmt = (select(Zones))
                     result = conn.execute(stmt).all()
                 else:
                     stmt = select(Zones).filter(Zones.name == name)
@@ -269,7 +267,7 @@ class AccessDB:
         with Session(self.engine) as conn:
             try:
                 for rr in data:
-                    if rr['type'] == ('SOA' or 'CNAME'):
+                    if rr['type'] in ['SOA', 'CNAME']:
                         if AccessDB.GetFromDomains(self,rr['name'],rr['dclass'],rr['type']):
                             return False
                 conn.execute(insert(Domains), data)

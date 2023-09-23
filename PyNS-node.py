@@ -68,7 +68,8 @@ class UDPserver(asyncio.DatagramProtocol):
             if result: return data[:2]+result
 
             result = self.auth.get(data) # <- Try to take data from Authoirty
-            if result: 
+            if result:
+                threading.Thread(target=self.cache.put, args=(result,False)).start()
                 return result
 
             if self.rec is True:

@@ -136,12 +136,12 @@ class Caching:
             self.buff.add(result)
         return result
 
-    def put(self, data:bytes):
+    def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
         result = dns.message.from_wire(data)
         if not key in self.cache and self.refresh > 0:
             self.cache[key] = data[2:]
-            if result.rcode() is dns.rcode.NOERROR:
+            if result.rcode() is dns.rcode.NOERROR and isupload is True:
                 self.temp.append(result)
             
     def download(self, engine):
@@ -149,10 +149,8 @@ class Caching:
         # --Getting all records from cache tatble
         try:
             if self.conf['RECURSION']['enable'] is True:
-                keys,_ = packing(self.cache, db.GetFromDomains())
-            else:
-                keys,_= packing(self.cache, db.GetFromDomains() + db.GetFromCache())
-            for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
+                keys,_ = packing(self.cache, db.GetFromCache())
+                for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
             #print('L:',self.cache.__len__(), 'DB:',keys.__len__())
         except:
             logging.exception('CACHE LOAD FROM DB CACHE')

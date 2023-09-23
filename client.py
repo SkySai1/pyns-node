@@ -69,16 +69,22 @@ def zonecreator():
                 str(data['expire']),
                 str(data['ttl'])
                 ])
-            soa = {
+            first = [{
                 "zone_id": id,
                 "name": data['name'],
                 "ttl": data['ttl'],
                 "dclass": 'IN',
                 "type": 'SOA',
                 #"data": [data['NS'], data['email'], data['serial'], data['refresh'], data['retry'], data['expire'], data['ttl']]
-                "data": [rdata]
-            }
-            Z.zonefilling([soa])
+                "data": [rdata]},
+                {
+                "zone_id": id,
+                "name": data['name'],
+                "ttl": data['ttl'],
+                "dclass": 'IN',
+                "type": 'NS',
+                "data": [data['NS']]}]
+            Z.zonefilling([first])
         else:
             print('Zone already exist')
     if data['type'] == 'slave':
