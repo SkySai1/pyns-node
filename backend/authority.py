@@ -82,7 +82,6 @@ class Authority:
                 if node:
                     rrset_an = node.get_rdataset(qclass,qtype)
                     rrset_au = findauth(zdata, qname)
-
                     if rrset_an:
                         answer = dns.rrset.from_rdata_list(qname,rrset_an.ttl,rrset_an)
                         r.answer.append(answer)
