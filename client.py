@@ -84,7 +84,7 @@ def zonecreator():
                 "dclass": 'IN',
                 "type": 'NS',
                 "data": [data['NS']]}]
-            Z.zonefilling([first])
+            Z.zonefilling(first)
         else:
             print('Zone already exist')
     if data['type'] == 'slave':

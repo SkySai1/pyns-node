@@ -16,5 +16,4 @@ class Zonemaker:
     
     def zonefilling(self, data):
         db = AccessDB(self.engine, self.conf)
-        for record in data:
-            state = db.NewDomains(record)
+        state = db.NewDomains(data)

@@ -24,6 +24,15 @@ def fakezone(query:dns.message.Message, zone, soa, ttl):
         response.set_rcode(dns.rcode.NXDOMAIN)
         return response.to_wire()
 
+def findauth(zdata:dns.zone.Zone, qname:dns.name.Name):
+    current = qname
+    origin = zdata.origin
+    while current >= origin:
+        rrauth = zdata.get_rdataset(current,dns.rdatatype.NS)
+        if rrauth: break
+        current = current.parent()
+    return rrauth
+
 class Authority:
 
     def __init__(self, conf, auth:DictProxy, zones:ListProxy):
@@ -31,41 +40,67 @@ class Authority:
         self.auth = auth
         self.zones = zones
 
+    def findnode(self, qname):
+        zone = None
+        node = None
+        zdata = None
+        for e in self.zones:
+            #print(e,qname)
+            #if re.match(f".*{re.escape(e)}$", qname.to_text()):
+            if qname.is_subdomain(dns.name.from_text(e)):
+                zone = e
+                break
+        if zone:
+            zdata = self.auth.get(zone)
+            if zdata:
+                node = zdata.get_node(qname)
+        return node, zdata
+
+    def findrdataset(self, qname, rdtype):
+        rrset = None
+        for e in self.zones:
+            if qname.is_subdomain(dns.name.from_text(e)):
+                zone = e
+                break
+        if zone:
+            zdata = self.auth.get(zone)
+            if zdata:
+                rrset = zdata.get_rdataset(qname,rdtype)
+                #print(zdata.get_rdataset(dns.name.from_text('ns1.tinirog.ru.'), dns.rdatatype.A))
+        return qname, rrset      
+
     def get(self, data:bytes):
         try:
             q = dns.message.from_wire(data)
             qname = q.question[0].name
             qclass = q.question[0].rdclass
             qtype = q.question[0].rdtype
-            zone = None
-            for e in self.zones:
-                #print(e,qname)
-                if re.match(f".*{re.escape(e)}$", qname.to_text()):
-                    zone = e
-                    break
-            if zone:
-                zdata = self.auth.get(zone)
-                if zdata:
-                    node = zdata.get_node(qname)
-                    if node:
-                        rrset_an = node.get_rdataset(qclass,qtype)
-                        rrset_au = node.get_rdataset(dns.rdataclass.IN, dns.rdatatype.NS)
-                        if not rrset_au:
-                            rrset_au = zdata.get_node(zone).get_rdataset(dns.rdataclass.IN, dns.rdatatype.NS)
-                        if rrset_an:
-                            #record = dns.rrset.from_text(qname, 60, qclass, qtype, '127.0.0.1', '127.0.0.2')
-                            #print(type(record), type(rrset))
-                            answer = dns.rrset.from_rdata_list(qname,rrset_an.ttl,rrset_an)
-                            authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
-                            r = dns.message.make_response(q)
-                            r.flags += dns.flags.AA
-                            r.answer.append(answer)
-                            r.authority.append(authority)
-                            return r.to_wire()
-                            #r.answer.append(record)
-                            
+            node, zdata = Authority.findnode(self,qname)
+            if zdata:
+                r = dns.message.make_response(q)
+                r.flags += dns.flags.AA
+                if node:
+                    rrset_an = node.get_rdataset(qclass,qtype)
+                    rrset_au = findauth(zdata, qname)
 
-
+                    if rrset_an:
+                        answer = dns.rrset.from_rdata_list(qname,rrset_an.ttl,rrset_an)
+                        r.answer.append(answer)
+                    if rrset_au:
+                        authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
+                        r.authority.append(authority)
+                        rrset_ad_list = [Authority.findrdataset(self, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
+                        for rrset in rrset_ad_list:
+                            if rrset[1]:
+                                additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
+                                r.additional.append(additional)        
+                
+                else:
+                    rrset_au = zdata.get_rdataset(zdata.origin, dns.rdatatype.SOA)
+                    authority = dns.rrset.from_rdata_list(zdata.origin,rrset_au.ttl,rrset_au)
+                    r.set_rcode(dns.rcode.NXDOMAIN)
+                    r.authority.append(authority)
+                return r.to_wire()
             return None
         except:
             logging.exception('GET AUTHORITY')
