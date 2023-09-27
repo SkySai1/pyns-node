@@ -4,14 +4,10 @@ import ipaddress
 import logging
 import asyncio
 from multiprocessing import Process, cpu_count, Pipe, current_process, Manager
-import pickle
-import re
 import sys
-import socket
 import threading
 import os
 import time
-from typing import Any
 import dns.rcode
 import dns.query
 import dns.message
@@ -20,8 +16,8 @@ from backend.caching import Caching
 from backend.recursive import Recursive
 from initconf import getconf
 from backend.helper import Helper
-from backend.techincal import Tech
-from backend.accessdb import enginer
+from backend.functions import echo
+
 
 _COUNT = 0
 # --- UDP socket ---
@@ -43,27 +39,10 @@ class UDPserver(asyncio.DatagramProtocol):
             global _COUNT
             _COUNT += 1
         result = UDPserver.handle(self, data, addr)
-        #UDPserver.thandle(self, data, addr)
         self.transport.sendto(result, addr)
 
-    def railway(self, request:dns.message.Message, ip):
-        try:
-            return True
-        except:
-            logging.exception('SECURITY CHECK')
-            return False         
-    
-    def thandle(self, data:bytes, addr:tuple):
-        global _COUNT
-        _COUNT +=1
-        #request = dns.message.from_wire(data)
-        return data
-        #result = self.cache.get(request, data[:2])
-
-
     def handle(self, data:bytes, addr:tuple):
-        try:
-            #print(dns.message.from_wire(data).question)            
+        try:        
             result = self.cache.get(data) # <- Try to take data from Cache
             if result: return data[:2]+result
 
@@ -78,16 +57,10 @@ class UDPserver(asyncio.DatagramProtocol):
                     threading.Thread(target=self.cache.put, args=(result,)).start()
                     return result
             else:
-                request = dns.message.from_wire(data)
-                result = dns.message.make_response(request)
-                result.set_rcode(5)
-                return result.to_wire(request.question[0].name)
+                return echo(data,dns.rcode.REFUSED).to_wire()
         except:
             logging.exception('UDP HANDLE')
-            request = dns.message.from_wire(data)
-            result = dns.message.make_response(request)
-            result.set_rcode(2)
-            return result.to_wire(request.question[0].name)
+            return echo(data,dns.rcode.SERVFAIL).to_wire()
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     # -Counter-
@@ -103,8 +76,6 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     port = CONF['GENERAL']['listen-port']
     try:
         if ipaddress.ip_address(ip).version == 4:
-            #threading.Thread(target=newone, args=(ip, port, _auth, _recursive, _cache)).start()
-            #newone(ip, port, _auth, _recursive, _cache)
             addr = (ip, port)
             print(f"Core {current_process().name} Start listen to: {addr}")
             loop = asyncio.new_event_loop()
@@ -146,25 +117,8 @@ def counter(pipe, output:bool = False):
             _COUNT = 0
             time.sleep(1)
         
-# Мультипроцессинг:
-def Parallel(data):
-    proc = []
-    for pos in data:
-        for fn in pos:
-            if type(pos[fn]) is dict:
-                p = Process(target=fn, kwargs=pos[fn])
-                p.start()
-                proc.append(p)
-            else:
-                p = Process(target=fn, args=pos[fn])
-                p.start()
-                proc.append(p)
-    for p in proc:
-        p.join()
-
-
 # --- Main Function ---
-def handler(CONF):
+def start(CONF):
 
     try: 
         with Manager() as manager:
@@ -195,9 +149,6 @@ def handler(CONF):
             for p in Stream:
                 p.join()
 
-        # -Start technical socket
-        #Process(target=techsock).start()
-
     except KeyboardInterrupt: pass
 
 if __name__ == "__main__":
@@ -216,7 +167,7 @@ if __name__ == "__main__":
     except:
         print('Bad config file')
         sys.exit()
-    handler(CONF)
+    start(CONF)
 
     
 

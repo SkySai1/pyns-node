@@ -130,6 +130,7 @@ enable = True
 - ✅ **Get zones via trasnsfer.** *Done. With TSIG and without*
 - ✅ **Download domains to 2nd lvl cache** *Done.*
 - ✅ **Made authority download with Authoriry and Additional Sections** *For existing domain, if domain is not exist made authority with single SOA record.Done*
+- ✅ **CNAME construct via all zones** *Done.*
 - 🚩 **Return zones via transfer** ...
 - 🚩 **Politics and settings for zones** ... 
 - 🚩 **TSIG keeping with zones binding** ...
@@ -141,7 +142,7 @@ enable = True
 - ✅ **Zones with domains** *Done. Foreign key one to many*
 - ✅ **Cache table** *Done.*
 - 🚩 **Nodes table with nodes groups**
-- 🚩 **Bind all rows to groups**
+- 🚩 **Bind all zones to nodes groups**
 
 ### FRONTEND
 - 🚩 **Domain and Cache managment form** ...

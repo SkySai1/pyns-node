@@ -31,39 +31,12 @@ def packing(cache, rawdata):
         keys.add(key)
         if not key in cache:
             r = dns.message.make_response(q)
-            if hasattr(row, 'flags'):
-                r.flags = flags = dns.flags.from_text(row.flags)
             r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-            if obj.__len__() == 2: r = addauth(r, rawdata, obj[1].name, row.name) # <- Доработка
             packet = dns.message.Message.to_wire(r)
             cache[key]=packet[2:]
             puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
     cnametoa(cache, puredata)
     return keys, cache  
-
-def addauth(r:dns.message.Message, rawdata, origin, fqdn):
-    auth = []
-    for obj in rawdata: 
-        row = obj[0]
-        if row.type == 'NS':
-            if fqdn == row.name:
-            #if re.match(f"^{re.escape(origin)}$",row.name):
-                r.authority = rrsetmaker(r.authority,row)
-                auth.append(row.data[0])
-    if not auth:
-        for obj in rawdata:
-            row = obj[0]
-            if row.type == 'NS':
-                if obj[1].name == origin == row.name:
-                #if re.match(f"^{re.escape(obj[1].name)}$",row.name):
-                    r.authority = rrsetmaker(r.authority,row)
-                    auth.append(row.data[0])
-    if auth:
-        for obj in rawdata:
-            row = obj[0]
-            if row.name in auth and row.type == 'A' and row.name != fqdn:
-                r.additional = rrsetmaker(r.additional, row)
-    return r
 
 def rrsetmaker(section, row):
     name = row.name.encode('idna').decode('utf-8')
@@ -120,16 +93,13 @@ class Caching:
     def debuff(self):
         while True:
             time.sleep(self.buffexp)
-            #print(self.buff.__len__())
             self.buff.clear()
 
     def get(self, data:bytes):
-        #print(self.buff.__len__())
         parse = parser(data,13)
         for save in self.buff:
             if parse == parser(save,11):
                 return save
-        #print(time.time(),'ASK:',dns.message.from_wire(data).question[0].to_text(), ', with KEY:', Caching.parser(self, data))
         result = self.cache.get(parse)
         if result:
             if self.buff.__len__() > self.bufflimit: self.buff.clear()
@@ -151,11 +121,8 @@ class Caching:
             if self.conf['RECURSION']['enable'] is True:
                 keys,_ = packing(self.cache, db.GetFromCache())
                 for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
-            #print('L:',self.cache.__len__(), 'DB:',keys.__len__())
         except:
             logging.exception('CACHE LOAD FROM DB CACHE')
-
-        #self.cache = cache
       
 
     def upload(self, engine):
@@ -181,49 +148,7 @@ class Caching:
         except:
             logging.exception('FAIL WITH DB CACHING')
 
-    def clear(self, record):
-        try:
-            while True:
-                time.sleep(self.refresh)
-                if record in self.cache:
-                    name, rdclass, rdtype, = binascii.unhexlify(record).decode().split(' ')
-                    packet,_ = Caching.precache(self, name, rdtype, rdclass)
-                    if packet:
-                        self.cache[record] = packet
-                        #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was PREcached')
-                    elif packet is None:
-                        del self.cache[record]
-                        #print(f'{datetime.datetime.now()}: {name, rdclass, rdtype} was uncached')
-                        break
-        except:
-            del self.cache[record]
 
-
-    def totalcache(self):
-        db = AccessDB(self.engine, self.conf)
-        allcache = db.GetFromCache()
-        table = []
-        for obj in allcache:
-            for row in obj:
-                table.append((row.name, row.type, row.dclass))
-                if row.type == 'CNAME':
-                    table.append((row.name, 'A', row.dclass))
-        for row in set(table):
-            packet, data = Caching.precache(self, row[0], row[1], row[2])
-            Caching.put(self,data,packet)
-
-    def precache(self, name, rdtype, rdclass):
-        db = AccessDB(self.engine, self.conf)
-        dbdata = db.GetFromCache(name, rdclass, rdtype)
-        if dbdata:
-            q = dns.message.make_query(name, rdtype, rdclass)
-            r = dns.message.make_response(q)
-            for obj in dbdata:
-                for row in obj:
-                    record = dns.rrset.from_text(str(row.name), int(row.ttl), str(row.dclass), str(row.type), str(row.data))
-                    r.answer.append(record)
-            return r.to_wire(q.question[0].name), r
-        return None, None
 
 
 
