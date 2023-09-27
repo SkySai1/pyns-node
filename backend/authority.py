@@ -85,20 +85,37 @@ class Authority:
                     if rrset_an:
                         answer = dns.rrset.from_rdata_list(qname,rrset_an.ttl,rrset_an)
                         r.answer.append(answer)
-                    if rrset_au:
-                        authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
-                        r.authority.append(authority)
-                        rrset_ad_list = [Authority.findrdataset(self, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
-                        for rrset in rrset_ad_list:
-                            if rrset[1]:
-                                additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
-                                r.additional.append(additional)        
-                
-                else:
-                    rrset_au = zdata.get_rdataset(zdata.origin, dns.rdatatype.SOA)
-                    authority = dns.rrset.from_rdata_list(zdata.origin,rrset_au.ttl,rrset_au)
-                    r.set_rcode(dns.rcode.NXDOMAIN)
-                    r.authority.append(authority)
+                    elif qtype == 1:
+                        answer = None
+                        stop = False
+                        while stop is False:
+                            if not node: break
+                            for rrset in node:
+                                if rrset.rdtype is dns.rdatatype.A:
+                                    answer = dns.rrset.from_rdata_list(qname,rrset.ttl,rrset)
+                                    stop = True
+                                    break
+                                if rrset.rdtype is dns.rdatatype.CNAME:
+                                    answer = dns.rrset.from_rdata_list(qname,rrset.ttl,rrset)
+                                    qname = rrset[0].to_text()
+                                    node, _ = Authority.findnode(self, dns.name.from_text(qname))
+                                    break
+                            if not answer: break
+                            else: r.answer.append(answer)
+                    if r.answer:
+                        if rrset_au:
+                            authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
+                            r.authority.append(authority)
+                            rrset_ad_list = [Authority.findrdataset(self, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
+                            for rrset in rrset_ad_list:
+                                if rrset[1]:
+                                    additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
+                                    r.additional.append(additional) 
+                        return r.to_wire()
+                rrset_au = zdata.get_rdataset(zdata.origin, dns.rdatatype.SOA)
+                authority = dns.rrset.from_rdata_list(zdata.origin,rrset_au.ttl,rrset_au)
+                r.set_rcode(dns.rcode.NXDOMAIN)
+                r.authority.append(authority)
                 return r.to_wire()
             return None
         except:
