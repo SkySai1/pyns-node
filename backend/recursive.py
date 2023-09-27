@@ -30,7 +30,7 @@ _ROOT = [
     "202.12.27.33"          #m.root-servers.net.
 ]
 
-_DEBUG = 0
+_DEBUG = 2
 
 QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
         15:'MX', 16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY',
@@ -131,8 +131,8 @@ class Recursive:
                 ns = str(rr[0])
                 if ipaddress.ip_address(ns).version == 4:
                     result, ns = Recursive.resolve(self,query, ns)
-                    if result and result.rcode() in [
-                        dns.rcode.NOERROR, dns.rcode.REFUSED]: return result, ns
+                    if result and (result.rcode() in [
+                        dns.rcode.NOERROR, dns.rcode.REFUSED] or dns.flags.AA in result.flags): return result, ns
             return None, ns
 
         elif result.authority:
