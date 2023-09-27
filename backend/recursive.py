@@ -62,7 +62,7 @@ class Recursive:
     def recursive(self, data:bytes):
         # - External resolving if specify external DNS server
         try:
-            query = dns.message.from_wire(data)
+            query = dns.message.from_wire(data,ignore_trailing=True)
             if self.resolver:
                 result = Recursive.extresolve(self, self.resolver, query)
                 return result, None

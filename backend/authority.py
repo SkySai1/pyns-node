@@ -71,7 +71,7 @@ class Authority:
 
     def get(self, data:bytes):
         try:
-            q = dns.message.from_wire(data)
+            q = dns.message.from_wire(data, ignore_trailing=True)
             qname = q.question[0].name
             qclass = q.question[0].rdclass
             qtype = q.question[0].rdtype

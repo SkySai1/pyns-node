@@ -108,7 +108,7 @@ class Caching:
 
     def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
-        result = dns.message.from_wire(data)
+        result = dns.message.from_wire(data,ignore_trailing=True)
         if not key in self.cache and self.refresh > 0:
             self.cache[key] = data[2:]
             if result.rcode() is dns.rcode.NOERROR and isupload is True:

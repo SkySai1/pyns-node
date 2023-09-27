@@ -20,6 +20,29 @@ from backend.functions import echo
 
 
 _COUNT = 0
+
+def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple):
+    try:        
+        result = cache.get(data) # <- Try to take data from Cache
+        if result: return data[:2]+result
+
+        result = auth.get(data) # <- Try to take data from Authoirty
+        if result:
+            threading.Thread(target=cache.put, args=(result,False)).start()
+            return result
+
+        if rec is True:
+            result = recursive.recursive(data)
+            if result:
+                threading.Thread(target=cache.put, args=(result,)).start()
+                return result
+        else:
+            return echo(data,dns.rcode.REFUSED).to_wire()
+    except:
+        logging.exception('UDP HANDLE')
+        return echo(data,dns.rcode.SERVFAIL).to_wire()
+
+
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
 
@@ -38,29 +61,52 @@ class UDPserver(asyncio.DatagramProtocol):
         if self.stat is True:
             global _COUNT
             _COUNT += 1
-        result = UDPserver.handle(self, data, addr)
+        result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr)
         self.transport.sendto(result, addr)
 
-    def handle(self, data:bytes, addr:tuple):
-        try:        
-            result = self.cache.get(data) # <- Try to take data from Cache
-            if result: return data[:2]+result
+# -- TCP socket --
+class TCPServer(asyncio.Protocol):
 
-            result = self.auth.get(data) # <- Try to take data from Authoirty
-            if result:
-                threading.Thread(target=self.cache.put, args=(result,False)).start()
-                return result
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, stat:bool=False) -> None:
+        self.auth = _auth
+        self.recursive = _recursive
+        self.cache = _cache
+        self.stat = stat
+        self.rec = eval(CONF['RECURSION']['enable']) 
+        super().__init__()    
+    
+    def connection_made(self, transport:asyncio.Transport):
+        self.transport = transport
 
-            if self.rec is True:
-                result = self.recursive.recursive(data)
-                if result:
-                    threading.Thread(target=self.cache.put, args=(result,)).start()
-                    return result
-            else:
-                return echo(data,dns.rcode.REFUSED).to_wire()
-        except:
-            logging.exception('UDP HANDLE')
-            return echo(data,dns.rcode.SERVFAIL).to_wire()
+    def data_received(self, data):
+        if self.stat is True:
+            global _COUNT
+            _COUNT += 1
+        addr = self.transport.get_extra_info('peername')
+        result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr)
+        l = result.__len__().to_bytes(2,'big')
+        #print(int.from_bytes(l,'big'), result.__len__())
+        self.transport.write(l+result)
+
+
+def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, isudp:bool=True):
+    loop = asyncio.new_event_loop()
+    if isudp is True:
+        addr = (ip, port)
+        listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, CONF, stat), addr, reuse_port=True)
+        transport, protocol = loop.run_until_complete(listen)
+    else:
+        listen = loop.create_server(lambda: TCPServer(_auth, _recursive, _cache, CONF, stat),ip,port,reuse_port=True)
+        transport = loop.run_until_complete(listen)
+    try:
+        threading.Thread(target=_cache.debuff, daemon=True).start()
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        transport.close()
+        loop.run_until_complete(transport.wait_closed())
+        loop.close()
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     # -Counter-
@@ -71,24 +117,15 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
 
     _recursive = Recursive(CONF)
 
-    # -MainListener for every IP-
-    ip = CONF['GENERAL']['listen-ip']
-    port = CONF['GENERAL']['listen-port']
+    # -MainListener IP-
     try:
+        ip = CONF['GENERAL']['listen-ip']
+        port = int(CONF['GENERAL']['listen-port'])
+        l = []
         if ipaddress.ip_address(ip).version == 4:
-            addr = (ip, port)
-            print(f"Core {current_process().name} Start listen to: {addr}")
-            loop = asyncio.new_event_loop()
-            listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, CONF, stat), addr, reuse_port=True)
-            transport, protocol = loop.run_until_complete(listen)
-            try:
-                threading.Thread(target=_cache.debuff, daemon=True).start()
-                loop.run_forever()
-            except KeyboardInterrupt:
-                pass
-            finally:
-                transport.close()
-                loop.close()
+            threading.Thread(target=listener,args=(ip, port, _auth,_recursive,_cache, stat)).start()
+            threading.Thread(target=listener,args=(ip, port, _auth,_recursive,_cache, stat, False)).start()
+            print(f"Core {current_process().name} Start listen to: {ip, port}")
     except:
         logging.exception('ERROR with listen on')
 
