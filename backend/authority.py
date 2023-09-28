@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
 import re
+import socket
 from sqlalchemy import create_engine
 from backend.accessdb import AccessDB
-from backend.caching import packing
+from backend.transfer import Transfer
 import dns.message
 import dns.rrset
 import dns.flags
@@ -12,6 +14,7 @@ import dns.rcode
 import dns.zone
 import dns.rdataclass
 import dns.rdatatype
+import dns.tsigkeyring
 try: from backend.cparser import parser
 except: from backend.parser import parser
 
@@ -69,12 +72,18 @@ class Authority:
                 #print(zdata.get_rdataset(dns.name.from_text('ns1.tinirog.ru.'), dns.rdatatype.A))
         return qname, rrset      
 
-    def get(self, data:bytes):
+    def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
-            q = dns.message.from_wire(data, ignore_trailing=True)
+            key = dns.tsigkeyring.from_text({
+            
+            })
+            q = dns.message.from_wire(data, ignore_trailing=True, keyring=key)
             qname = q.question[0].name
             qclass = q.question[0].rdclass
             qtype = q.question[0].rdtype
+            if qtype == 252 and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
+                T = Transfer(self.conf, qname, addr)
+                return T.sendaxfr(q,transport), False
             node, zdata = Authority.findnode(self,qname)
             if zdata:
                 r = dns.message.make_response(q)
@@ -111,16 +120,16 @@ class Authority:
                                 if rrset[1]:
                                     additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
                                     r.additional.append(additional) 
-                        return r.to_wire()
+                        return r.to_wire(), True
                 rrset_au = zdata.get_rdataset(zdata.origin, dns.rdatatype.SOA)
                 authority = dns.rrset.from_rdata_list(zdata.origin,rrset_au.ttl,rrset_au)
                 r.set_rcode(dns.rcode.NXDOMAIN)
                 r.authority.append(authority)
-                return r.to_wire()
-            return None
+                return r.to_wire(), True
+            return None, True
         except:
             logging.exception('GET AUTHORITY')
-            return data
+            return data, False
 
     def download(self, engine):
         db = AccessDB(engine, self.conf)

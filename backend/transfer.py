@@ -1,4 +1,5 @@
 
+import asyncio
 import logging
 import re
 import dns.query
@@ -11,6 +12,7 @@ import dns.tsigkeyring
 import dns.name
 import dns.message
 import dns.tsig
+import dns.rrset
 #from PyDNS import create_engine
 from backend.accessdb import AccessDB, enginer, getnow
 from backend.zonemanager import Zonemaker
@@ -30,13 +32,30 @@ QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
 CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
-    def __init__(self, CONF, zone, target, tsig, keyname):
+    def __init__(self, CONF, zone, target, tsig:str|None=None, keyname:str|None=None):
         self.timedelta = int(CONF['DATABASE']['timedelta'])
         self.conf = CONF
         self.zone = zone
         self.target = target
         self.keyname = keyname
         self.tsig = tsig
+
+    def sendaxfr(self, q:dns.message.Message, transport:asyncio.Transport):
+        Z = Zonemaker(self.conf)
+        auth = Z.zonecontent(self.zone)
+        r = dns.message.make_response(q)
+        soa = None
+        for data in auth.iterate_rdatasets():
+            if data[1].rdtype is dns.rdatatype.SOA: soa = data
+            r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
+            data = r.to_wire()
+            l = data.__len__().to_bytes(2,'big')
+            transport.write(l+data)
+        #if soa: r.answer.append(dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1]))
+        if soa: 
+            r.answer = [dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1])]
+            return r.to_wire()
+        #dns.query.send_tcp(conn,r,addr)
 
     def getaxfr(self):
         try:
@@ -45,11 +64,16 @@ class Transfer:
             else:
                 key = None
             qname = dns.name.from_text(self.zone)
+            if isinstance(self.target, tuple):
+                port = self.target[1]
+                self.target = self.target[0]
+            else:
+                port = 53
             try:
                 xfr = dns.query.xfr(
                     self.target,
                     self.zone,
-                    port=53,
+                    port=port,
                     keyring=key,
                     relativize=False
                 )
@@ -91,58 +115,3 @@ class Transfer:
         except:
             logging.exception('GETAXFR FUNCTION')
             pass
-            
-
-    def getaxfr_old(self):
-        key = dns.tsigkeyring.from_text({
-        "name": "secret"
-        })
-        xfr = dns.query.xfr(
-            self.target,
-            self.zone,
-            port=53,
-            #keyring=key,
-            #keyalgorithm='HMAC-SHA256'
-        )
-        engine = enginer(self.conf)
-        db = AccessDB(engine, self.conf)
-        zone = dns.zone.from_xfr(xfr)
-        #print(zone.to_text())
-        if zone:
-            soa = str(zone.get_soa()).split(' ')
-            data = {
-                'name' : str(zone.origin),
-                'type' : 'slave',
-                'serial' : soa[2],
-                'refresh': soa[3],
-                'retry': soa[4],
-                'expire': soa[5],
-                'ttl' : soa[6]
-            }
-            result = db.ZoneCreate(data)
-            if result: 
-                zid = result[-1].id
-                data = []
-                for i in zone.iterate_rdatas():
-                    name = re.sub('@',str(zone.origin),i[0].to_text())
-                    if name[-1] != '.':
-                        name += '.'+str(zone.origin)
-                    ttl = i[1]
-                    rclass = CLASS[i[2].rdclass]
-                    rtype = QTYPE[i[2].rdtype]
-                    rdata = re.sub('@',str(zone.origin),i[2].to_text())
-                    if i[2].rdtype in [2,5,6,12,15,39] and rdata[-1] != '.':
-                        rdata = rdata+'.'+str(zone.origin)
-
-                    row = {
-                        "zone_id": zid,
-                        "name": name,
-                        "ttl": ttl,
-                        "dclass": rclass,
-                        "type": rtype,
-                        "data": rdata
-                    }
-                    data.append(row)    
-                    #print(f"{name} {ttl} {rclass} {rtype} {rdata}")
-                    pass
-                db.NewDomains(data)

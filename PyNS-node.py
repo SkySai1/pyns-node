@@ -22,15 +22,16 @@ from backend.functions import echo
 
 _COUNT = 0
 
-def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple):
+def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple, transport):
     try:  
         result = cache.get(data) # <- Try to take data from Cache
         if result:
             return data[:2]+result
 
-        result = auth.get(data) # <- Try to take data from Authoirty
+        result, iscache = auth.get(data, addr, transport) # <- Try to take data from Authoirty
         if result:
-            threading.Thread(target=cache.put, args=(result,False)).start()
+            if iscache is True:
+                threading.Thread(target=cache.put, args=(result,False)).start()
             return result
 
         if rec is True:
@@ -58,12 +59,13 @@ class UDPserver(asyncio.DatagramProtocol):
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
         self.transport = transport
+        #print(s.type, type(s.type))
 
     def datagram_received(self, data, addr):
         if self.stat is True:
             global _COUNT
             _COUNT += 1
-        result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr)
+        result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr, self.transport)
         self.transport.sendto(result, addr)
 
 # -- TCP socket --
@@ -85,7 +87,7 @@ class TCPServer(asyncio.Protocol):
             global _COUNT
             _COUNT += 1
         addr = self.transport.get_extra_info('peername')
-        result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr)
+        result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr, self.transport)
         l = result.__len__().to_bytes(2,'big')
         #print(int.from_bytes(l,'big'), result.__len__())
         self.transport.write(l+result)
