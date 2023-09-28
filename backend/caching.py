@@ -14,8 +14,8 @@ import dns.flags
 import binascii
 from backend.recursive import QTYPE, CLASS
 from backend.accessdb import AccessDB, getnow
-try: from backend.cparser import parser
-except: from backend.parser import parser
+try: from backend.cparser import parser, iterater
+except: from backend.parser import parser, iterater
 
 def packing(cache, rawdata):
     puredata = []
@@ -96,11 +96,9 @@ class Caching:
             self.buff.clear()
 
     def get(self, data:bytes):
-        parse = parser(data,13)
-        for save in self.buff:
-            if parse == parser(save,11):
-                return save
-        result = self.cache.get(parse)
+        result, key = iterater(data, self.buff)
+        if result: return result
+        result = self.cache.get(key)
         if result:
             if self.buff.__len__() > self.bufflimit: self.buff.clear()
             self.buff.add(result)
