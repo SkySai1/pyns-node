@@ -11,6 +11,7 @@ import time
 import dns.rcode
 import dns.query
 import dns.message
+import dns.name
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
@@ -22,9 +23,10 @@ from backend.functions import echo
 _COUNT = 0
 
 def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple):
-    try:        
+    try:  
         result = cache.get(data) # <- Try to take data from Cache
-        if result: return data[:2]+result
+        if result:
+            return data[:2]+result
 
         result = auth.get(data) # <- Try to take data from Authoirty
         if result:

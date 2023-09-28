@@ -1,8 +1,6 @@
-import datetime
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
-import re
-import threading
+from threading import Thread as T
 import time
 import dns.message
 import dns.rrset
@@ -11,7 +9,6 @@ import dns.rdataclass
 import dns.rcode
 import dns.name
 import dns.flags
-import binascii
 from backend.recursive import QTYPE, CLASS
 from backend.accessdb import AccessDB, getnow
 try: from backend.cparser import parser, iterater
@@ -85,7 +82,7 @@ class Caching:
         self.cache = CACHE
         self.temp = TEMP
         self.state = True
-        self.buff = set()
+        self.buff = list()
         self.buffexp = float(CONF['CACHING']['expire'])
         self.bufflimit = int(CONF['CACHING']['limit'])
         self.timedelta = int(CONF['DATABASE']['timedelta'])
@@ -95,13 +92,17 @@ class Caching:
             time.sleep(self.buffexp)
             self.buff.clear()
 
+    def move(self, i):
+        if i > 0:
+            self.buff.insert(i-1, self.buff.pop(i))
+
     def get(self, data:bytes):
-        result, key = iterater(data, self.buff)
+        result, key, self.buff = iterater(data, self.buff)
         if result: return result
         result = self.cache.get(key)
         if result:
             if self.buff.__len__() > self.bufflimit: self.buff.clear()
-            self.buff.add(result)
+            self.buff.append(result)
         return result
 
     def put(self, data:bytes, isupload:bool=True):
@@ -116,7 +117,7 @@ class Caching:
         db = AccessDB(engine, self.conf)
         # --Getting all records from cache tatble
         try:
-            if self.conf['RECURSION']['enable'] is True:
+            if eval(self.conf['RECURSION']['enable']) is True:
                 keys,_ = packing(self.cache, db.GetFromCache())
                 for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
