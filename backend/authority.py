@@ -143,4 +143,4 @@ class Authority:
                 self.auth[zone] = dns.zone.from_text("\n".join([" ".join(data) for data in zonedata[zone]]), dns.name.from_text(zone), relativize=False)
             for e in set(self.auth.keys()) ^ zones: self.auth.pop(e)
         except:
-            logging.exception('CACHE LOAD FROM DB CACHE')
+            logging.error('Fail with download zones data from DB')

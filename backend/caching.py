@@ -120,7 +120,7 @@ class Caching:
                 keys,_ = packing(self.cache, db.GetFromCache())
                 for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
-            logging.exception('CACHE LOAD FROM DB CACHE')
+            logging.error('Fail with get cache data from DB')
       
 
     def upload(self, engine):
@@ -145,7 +145,7 @@ class Caching:
                     db.PutInCache(data)
                     [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.exception('FAIL WITH DB CACHING')
+            logging.error('Fail with upload data to DB')
 
 
 

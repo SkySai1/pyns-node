@@ -12,12 +12,15 @@ import dns.rcode
 import dns.query
 import dns.message
 import dns.name
+import dns.rdataclass
+import dns.rdatatype
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
+from backend.logging import logsetup
 
 
 _COUNT = 0
@@ -42,8 +45,9 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
         else:
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
-        logging.exception('UDP HANDLE')
-        return echo(data,dns.rcode.SERVFAIL).to_wire()
+        result = echo(data,dns.rcode.SERVFAIL)
+        logging.error(f'fail with handle querie {result.question[0].to_text()}')
+        return result.to_wire()
 
 
 # --- UDP socket ---
@@ -105,12 +109,14 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
     try:
         threading.Thread(target=_cache.debuff, daemon=True).start()
         loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
         transport.close()
         loop.run_until_complete(transport.wait_closed())
         loop.close()
+    except KeyboardInterrupt:
+        pass
+    except:
+        logging.critical('problem with asyncio loop in thread listener')
+
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     # -Counter-
@@ -127,40 +133,45 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
         port = int(CONF['GENERAL']['listen-port'])
         l = []
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,args=(ip, port, _auth,_recursive,_cache, stat)).start()
-            threading.Thread(target=listener,args=(ip, port, _auth,_recursive,_cache, stat, False)).start()
+            threading.Thread(target=listener,name=current_process().name+'-UDP',args=(ip, port, _auth,_recursive,_cache, stat)).start()
+            threading.Thread(target=listener,name=current_process().name+'-TCP',args=(ip, port, _auth,_recursive,_cache, stat, False)).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
-    except:
-        logging.exception('ERROR with listen on')
+        else:
+            logging.error(f"{ip} is not available")
+    except Exception as e:
+        logging.critical('some problem with main launcher')
 
 
 # --- Some Functions ---
 
 def counter(pipe, output:bool = False):
-    if output is True:
-        while True:
-            try:
-                l1,l2,l3 = os.getloadavg()
-                now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
-                total = 0
-                for parent in pipe:
-                    data = parent.recv()
-                    print(data)
-                    total += data[1]
-                print(f'{now}\t{total}\t{l1,l2,l3}')              
-            except Exception as e: print(e)
-            time.sleep(1)
-    else:
-        global _COUNT
-        proc = current_process().name
-        while True:
-            pipe.send([proc, _COUNT])
-            _COUNT = 0
-            time.sleep(1)
+    try:
+        if output is True:
+            while True:
+                try:
+                    l1,l2,l3 = os.getloadavg()
+                    now = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
+                    total = 0
+                    for parent in pipe:
+                        data = parent.recv()
+                        print(data)
+                        total += data[1]
+                    print(f'{now}\t{total}\t{l1,l2,l3}')              
+                except Exception as e: print(e)
+                time.sleep(1)
+        else:
+            global _COUNT
+            proc = current_process().name
+            while True:
+                pipe.send([proc, _COUNT])
+                _COUNT = 0
+                time.sleep(1)
+    except:
+        logging.error('some problem with counter')
         
 # --- Main Function ---
 def start(CONF):
-
+    logsetup(CONF)
     try: 
         with Manager() as manager:
             # -Init Classes
@@ -174,15 +185,15 @@ def start(CONF):
             Stream = []
             for i in range(cpu_count()):
                 gather, stat = Pipe()
-                name = f'#{i}'
+                name = f'listener#{i}'
                 p = Process(target=launcher, args=(stat, CONF, _cache, _auth), name=name)
                 p.start()
                 Stream.append(p)
                 Parents.append(gather)
-            
             # -Start background worker
-            Stream.append(Process(target=helper.watcher).start())
-
+            p = Process(target=helper.watcher, name='watcher')
+            p.start()
+            Stream.append(p)
             # -Counter-
             if eval(CONF['GENERAL']['printstats']) is True:
                 threading.Thread(target=counter, args=(Parents,True), daemon=True).start()
@@ -191,6 +202,9 @@ def start(CONF):
                 p.join()
 
     except KeyboardInterrupt: pass
+    except:
+        logging.critical('some problem with starting')
+        sys.exit(1)
 
 if __name__ == "__main__":
     try:
@@ -206,7 +220,8 @@ if __name__ == "__main__":
         if state is False:
             raise Exception()
     except:
-        sys.exit()
+        logging.exception('Error with manual start')
+        sys.exit(1)
     start(CONF)
 
     

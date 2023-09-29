@@ -30,8 +30,8 @@ def getconf(path):
         else:
             return None, False
     except Exception as e:
-        print(e)
-        sys.exit()
+        logging.critical(str(e))
+        sys.exit(1)
 
 def checkconf(CONF:configparser.ConfigParser):
     msg = []
