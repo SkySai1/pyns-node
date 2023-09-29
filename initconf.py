@@ -10,7 +10,7 @@ import ipaddress
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'AUTHORITY': [],
-    'CACHING': ['expire', 'limit'],
+    'CACHING': ['expire', 'limit', 'download', 'upload'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
     'LOGGING' : ['enable', 'keeping', 'pathway' , 'minimum', 'separate', 'maxsize']
@@ -64,6 +64,8 @@ def checkconf(CONF:configparser.ConfigParser):
                         if opt[1] not in ['debug', 'info', 'warning', 'error', 'critical']: raise Exception
                     if opt[0] == 'maxsize':
                         if not re.match('^[0-9]*[b|k|m|g]$', opt[1].lower()):raise Exception
+                    if opt[0] == 'download': eval(opt[1])
+                    if opt[0] == 'upload': eval(opt[1])
                 except:
                     msg.append(f"{s}: {opt[0]} = {opt[1]} <- bad statetement")
                     continue
@@ -110,7 +112,11 @@ def deafultconf():
         ";Time to clear of 1st lvl cache":None,
         'expire': 5,
         ";Max records in 1st lvl cache":None,
-        'limit': 100
+        'limit': 100,
+        ";Is to download cache data from node into DB = False|True":None,
+        'download': True,
+        ";Is to upload cache data from DB into node = False|True":None,
+        'upload': True
     }
     config['RECURSION'] = {
         'enable': False,
