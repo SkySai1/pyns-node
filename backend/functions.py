@@ -10,6 +10,10 @@ def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:l
     return result
 
 def getnow(delta, rise):
+    '''
+    *delta* is timedelta of timezone \n
+    *rise* is seconds which need to add to current time
+    '''
     offset = datetime.timedelta(hours=delta)
     tz = datetime.timezone(offset)
     now = datetime.datetime.now(tz=tz)
