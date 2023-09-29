@@ -85,6 +85,15 @@ class Rules(Base):
 
     zones = relationship("Zones", secondary="zones_rules", back_populates="rules", cascade='delete', single_parent=True)
 
+class Logs(Base):
+    __tablename__ = "logs"
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node = Column(String(255), nullable=False, unique=True)
+    date = Column(DateTime(timezone=True), nullable=False)
+    level = Column(String(20), nullable=False)
+    thread = Column(String(255), nullable=False)
+    message = Column(Text)
+
 class Join_ZonesRules(Base):
     __tablename__ = "zones_rules"
     id = Column(Integer, primary_key=True, autoincrement=True)

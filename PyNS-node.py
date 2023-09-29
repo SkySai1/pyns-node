@@ -206,7 +206,6 @@ if __name__ == "__main__":
         if state is False:
             raise Exception()
     except:
-        print('Bad config file')
         sys.exit()
     start(CONF)
 

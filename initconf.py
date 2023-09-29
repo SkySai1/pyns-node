@@ -1,16 +1,19 @@
 #!/home/dnspy/server/dns/bin/python3
+import logging
 import os
 import configparser
+import re
 import sys
-import uuid
-import logging
+import os, platform
+import ipaddress
 
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'AUTHORITY': [],
     'CACHING': ['expire', 'limit'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
-    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync'],
+    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
+    'LOGGING' : ['enable', 'keeping', 'pathway' , 'minimum', 'separate', 'maxsize']
 }
 
 def getconf(path):
@@ -30,15 +33,50 @@ def getconf(path):
         print(e)
         sys.exit()
 
-def checkconf(CONF):
+def checkconf(CONF:configparser.ConfigParser):
+    msg = []
     try:
-        eval(CONF['GENERAL']['printstats'])
-        eval(CONF['RECURSION']['enable'])
-        float(CONF['CACHING']['expire'])
-        int(CONF['CACHING']['limit'])
-        return True
+        for s in CONF:
+            for opt in CONF.items(s):
+                try:
+                    if opt[0] == 'listen-ip': ipaddress.ip_address(opt[1]).version == 4
+                    if opt[0] == 'listen-port': int(opt[1])
+                    if opt[0] == 'printstats': eval(opt[1])
+                    if opt[0] == 'expire': float(opt[1])
+                    if opt[0] == 'limit': int(opt[1])
+                    if opt[0] == 'enable': eval(opt[1])
+                    if opt[0] == 'resolver' and opt[1] != '': ipaddress.ip_address(opt[1]).version == 4
+                    if opt[0] == 'maxdepth': int(opt[1])
+                    if opt[0] == 'timeout': float(opt[1])
+                    if opt[0] == 'retry': int(opt[1])
+                    if opt[0] == 'timesync': float(opt[1])
+                    if opt[0] == 'keeping':
+                        if opt[1] not in ['db', 'file', 'both']: raise Exception
+                    if opt[0] == 'pathway':   
+                        if not os.path.exists(opt[1]):
+                            try:
+                                os.mkdir(opt[1])
+                            except:
+                                msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir do not exist")
+                        elif not os.access(opt[1], os.R_OK):
+                            msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir without read access ")
+                    if opt[0] == 'minimum':
+                        if opt[1] not in ['debug', 'info', 'warning', 'error', 'critical']: raise Exception
+                    if opt[0] == 'maxsize':
+                        if not re.match('^[0-9]*[b|k|m|g]$', opt[1].lower()):raise Exception
+                except:
+                    msg.append(f"{s}: {opt[0]} = {opt[1]} <- bad statetement")
+                    continue
+        if not msg: 
+            return True
+        else:
+            logging.basicConfig(format="%(asctime)s %(levelname)s at %(name)s:: %(message)s", force=True)
+            log = logging.getLogger('CONFIG CHECK')
+            for m in msg:
+                log.critical(m)
+            return False
     except Exception as e:
-        print(e)
+        logging.critical('bad config file, recreate it')
         return False
 
 
@@ -47,6 +85,11 @@ def createconf(where, what:configparser.ConfigParser):
         what.write(f)
 
 def deafultconf():
+    if platform.system() == "Windows":
+        hostname = platform.uname().node
+    else:
+        hostname = os.uname()[1]  # doesnt work on windows
+
     config = configparser.ConfigParser(allow_no_value=True)
     DBHost = str(input('Input HOSTNAME of your Data Base:\n'))    
     DBUser = str(input('Input USER of your Data Base:\n'))
@@ -85,6 +128,22 @@ def deafultconf():
         'dbname': DBName,
         ";Time to sync with Data Base":None,
         'timesync': 5,
+        ";To identify themselves in DB":None,
+        'node': hostname,
+    }
+    config['LOGGING'] = {
+    ";enable logging = False|True": None,
+    'enable': True, 
+    ";log storage (in DB or file) = db|file|both": None,
+    'keeping': 'both', 
+    ";folder where is logfiles placing, actually while 'keeping' is file or both":None,
+    'pathway': './logs/' , 
+    ";minimum level of log events = debug|info|warning|error|critical":None,
+    'minimum': 'error',
+    ";will separate log files by level = False|True":None, 
+    'separate': True,
+    ";max size of anyone log files = 1048576B|1024K|1M|1G":None,
+    'maxsize': '1M'
     }
     return config
 
