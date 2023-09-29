@@ -1,9 +1,6 @@
 import asyncio
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
-import re
-import socket
-from sqlalchemy import create_engine
 from backend.accessdb import AccessDB
 from backend.transfer import Transfer
 import dns.message
@@ -15,8 +12,6 @@ import dns.zone
 import dns.rdataclass
 import dns.rdatatype
 import dns.tsigkeyring
-try: from backend.cparser import parser
-except: from backend.parser import parser
 
 
 def fakezone(query:dns.message.Message, zone, soa, ttl):

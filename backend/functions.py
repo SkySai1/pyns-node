@@ -1,3 +1,4 @@
+import datetime
 import dns.message
 import dns.rcode
 
@@ -7,3 +8,9 @@ def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:l
     result = dns.message.make_response(m)
     result.set_rcode(state)
     return result
+
+def getnow(delta, rise):
+    offset = datetime.timedelta(hours=delta)
+    tz = datetime.timezone(offset)
+    now = datetime.datetime.now(tz=tz)
+    return now + datetime.timedelta(0,rise) 

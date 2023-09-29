@@ -14,7 +14,7 @@ import dns.message
 import dns.tsig
 import dns.rrset
 #from PyDNS import create_engine
-from backend.accessdb import AccessDB, enginer, getnow
+from backend.functions import getnow
 from backend.zonemanager import Zonemaker
 
 QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',

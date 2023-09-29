@@ -7,6 +7,7 @@ import dns.rdataclass
 import dns.rdatatype
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
+from backend.functions import getnow
 from backend.rulesmaker import makerules
 from backend.recursive import QTYPE, CLASS
 
@@ -337,14 +338,6 @@ class AccessDB:
                     return False
             return True
 
-
-
-
-def getnow(delta, rise):
-    offset = datetime.timedelta(hours=delta)
-    tz = datetime.timezone(offset)
-    now = datetime.datetime.now(tz=tz)
-    return now + datetime.timedelta(0,rise) 
 
 # --- Direct Access to file ---
 

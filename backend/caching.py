@@ -1,6 +1,5 @@
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
-from threading import Thread as T
 import time
 import dns.message
 import dns.rrset
@@ -9,8 +8,8 @@ import dns.rdataclass
 import dns.rcode
 import dns.name
 import dns.flags
-from backend.recursive import QTYPE, CLASS
-from backend.accessdb import AccessDB, getnow
+from backend.accessdb import AccessDB
+from backend.functions import getnow
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
