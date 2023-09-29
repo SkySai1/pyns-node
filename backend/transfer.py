@@ -33,7 +33,7 @@ CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
     def __init__(self, CONF, zone, target, tsig:str|None=None, keyname:str|None=None):
-        self.timedelta = int(CONF['DATABASE']['timedelta'])
+        self.timedelta = int(CONF['GENERAL']['timedelta'])
         self.conf = CONF
         self.zone = zone
         self.target = target

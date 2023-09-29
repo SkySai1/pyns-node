@@ -84,7 +84,7 @@ class Caching:
         self.buff = list()
         self.buffexp = float(CONF['CACHING']['expire'])
         self.bufflimit = int(CONF['CACHING']['limit'])
-        self.timedelta = int(CONF['DATABASE']['timedelta'])
+        self.timedelta = int(CONF['GENERAL']['timedelta'])
 
     def debuff(self):
         while True:

@@ -6,11 +6,11 @@ import uuid
 import logging
 
 _OPTIONS ={
-    'GENERAL': ['listen-ip', 'listen-port', 'printstats'],
+    'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'AUTHORITY': [],
     'CACHING': ['expire', 'limit'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
-    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname', 'timedelta', 'timesync'],
+    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync'],
 }
 
 def getconf(path):
@@ -57,6 +57,8 @@ def deafultconf():
         'listen-port': 53,
         ";Print statistic in console": None,
         'printstats': False,
+        ";For mysql better keep timedelta as 0, for pgsql as your region timezone": None,
+        'timedelta': 3
     }
     config['AUTHORITY'] = {
 
@@ -81,8 +83,6 @@ def deafultconf():
         'dbhost': DBHost,
         'dbport': 5432,
         'dbname': DBName,
-        ";For mysql better keep timedelta as 0, for pgsql as your region timezone": None,
-        'timedelta': 3,
         ";Time to sync with Data Base":None,
         'timesync': 5,
     }

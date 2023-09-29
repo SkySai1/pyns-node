@@ -111,7 +111,7 @@ class AccessDB:
     def __init__(self, engine, _CONF):
         self.engine = engine
         self.conf = _CONF
-        self.timedelta = int(_CONF['DATABASE']['timedelta'])
+        self.timedelta = int(_CONF['GENERAL']['timedelta'])
 
 
     # -- Get from Zones
