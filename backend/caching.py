@@ -116,7 +116,7 @@ class Caching:
         db = AccessDB(engine, self.conf)
         # --Getting all records from cache tatble
         try:
-            if eval(self.conf['RECURSION']['enable']) is True:
+            if eval(self.conf['CACHING']['download']) is True:
                 keys,_ = packing(self.cache, db.GetFromCache())
                 for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
@@ -124,25 +124,26 @@ class Caching:
       
 
     def upload(self, engine):
-        try:            
-            db = AccessDB(engine, self.conf) # <- Init Data Base
-            db.CacheExpired(expired=getnow(self.timedelta, 0))
-            if self.temp:
-                data = []
-                for result in self.temp:
-                    Q = result.question[0]
-                    for record in result.answer:
-                        data.append({
-                            'name':record.name.to_text().encode('utf-8').decode('idna'),
-                            'ttl':record.ttl,
-                            'rclass': dns.rdataclass.to_text(record.rdclass),
-                            'type': dns.rdatatype.to_text(record.rdtype),
-                            'data':[rr.to_text() for rr in record],
-                            'flags':dns.flags.to_text(result.flags)
-                        })
-                    
-                db.PutInCache(data)
-                [self.temp.pop(0) for i in range(self.temp.__len__())]
+        try:
+            if eval(self.conf['CACHING']['upload']) is True:            
+                db = AccessDB(engine, self.conf) # <- Init Data Base
+                db.CacheExpired(expired=getnow(self.timedelta, 0))
+                if self.temp:
+                    data = []
+                    for result in self.temp:
+                        Q = result.question[0]
+                        for record in result.answer:
+                            data.append({
+                                'name':record.name.to_text().encode('utf-8').decode('idna'),
+                                'ttl':record.ttl,
+                                'rclass': dns.rdataclass.to_text(record.rdclass),
+                                'type': dns.rdatatype.to_text(record.rdtype),
+                                'data':[rr.to_text() for rr in record],
+                                'flags':dns.flags.to_text(result.flags)
+                            })
+                        
+                    db.PutInCache(data)
+                    [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
             logging.exception('FAIL WITH DB CACHING')
 
