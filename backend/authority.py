@@ -31,41 +31,39 @@ def findauth(zdata:dns.zone.Zone, qname:dns.name.Name):
         current = current.parent()
     return rrauth
 
+def findnode(auth:DictProxy, zones:ListProxy, qname:dns.name.Name) :
+    zone = None
+    node = None
+    zdata = None
+    for e in zones:
+        if qname.is_subdomain(dns.name.from_text(e)):
+            zone = e
+            break
+    if zone:
+        zdata = auth.get(zone)
+        if zdata:
+            node = zdata.get_node(qname)
+    return node, zdata
+
+def findrdataset(auth:DictProxy, zones:ListProxy, qname:dns.name.Name, rdtype:dns.rdatatype):
+    rrset = None
+    for e in zones:
+        if qname.is_subdomain(dns.name.from_text(e)):
+            zone = e
+            break
+    if zone:
+        zdata = auth.get(zone)
+        if zdata:
+            rrset = zdata.get_rdataset(qname,rdtype)
+    return qname, rrset  
+
 class Authority:
 
     def __init__(self, conf, auth:DictProxy, zones:ListProxy):
         self.conf = conf
         self.auth = auth
         self.zones = zones
-
-    def findnode(self, qname):
-        zone = None
-        node = None
-        zdata = None
-        for e in self.zones:
-            #print(e,qname)
-            #if re.match(f".*{re.escape(e)}$", qname.to_text()):
-            if qname.is_subdomain(dns.name.from_text(e)):
-                zone = e
-                break
-        if zone:
-            zdata = self.auth.get(zone)
-            if zdata:
-                node = zdata.get_node(qname)
-        return node, zdata
-
-    def findrdataset(self, qname, rdtype):
-        rrset = None
-        for e in self.zones:
-            if qname.is_subdomain(dns.name.from_text(e)):
-                zone = e
-                break
-        if zone:
-            zdata = self.auth.get(zone)
-            if zdata:
-                rrset = zdata.get_rdataset(qname,rdtype)
-                #print(zdata.get_rdataset(dns.name.from_text('ns1.tinirog.ru.'), dns.rdatatype.A))
-        return qname, rrset      
+ 
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
@@ -79,7 +77,7 @@ class Authority:
             if qtype == 252 and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 T = Transfer(self.conf, qname, addr)
                 return T.sendaxfr(q,transport), False
-            node, zdata = Authority.findnode(self,qname)
+            node, zdata = findnode(self.auth, self.zones, qname)
             if zdata:
                 r = dns.message.make_response(q)
                 r.flags += dns.flags.AA
@@ -102,7 +100,7 @@ class Authority:
                                 if rrset.rdtype is dns.rdatatype.CNAME:
                                     answer = dns.rrset.from_rdata_list(qname,rrset.ttl,rrset)
                                     qname = rrset[0].to_text()
-                                    node, _ = Authority.findnode(self, dns.name.from_text(qname))
+                                    node, _ = findnode(self.auth, self.zones, dns.name.from_text(qname))
                                     break
                             if not answer: break
                             else: r.answer.append(answer)
@@ -110,7 +108,7 @@ class Authority:
                         if rrset_au:
                             authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
                             r.authority.append(authority)
-                            rrset_ad_list = [Authority.findrdataset(self, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
+                            rrset_ad_list = [findrdataset(self.auth, self.zones, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
                             for rrset in rrset_ad_list:
                                 if rrset[1]:
                                     additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
@@ -123,7 +121,7 @@ class Authority:
                 return r.to_wire(), True
             return None, True
         except:
-            logging.exception('GET AUTHORITY')
+            logging.error('get data from local zones is fail')
             return data, False
 
     def download(self, engine):
@@ -143,4 +141,4 @@ class Authority:
                 self.auth[zone] = dns.zone.from_text("\n".join([" ".join(data) for data in zonedata[zone]]), dns.name.from_text(zone), relativize=False)
             for e in set(self.auth.keys()) ^ zones: self.auth.pop(e)
         except:
-            logging.error('Fail with download zones data from DB')
+            logging.error('making local zones data is fail')
