@@ -101,7 +101,7 @@ class Transfer:
                                     'zone_id': id,
                                     'name':record.name.to_text(),
                                     'ttl':record.ttl,
-                                    'dclass': dns.rdataclass.to_text(record.rdclass),
+                                    'cls': dns.rdataclass.to_text(record.rdclass),
                                     'type': dns.rdatatype.to_text(record.rdtype),
                                     'data':[rr.to_text() for rr in record]
                                 })

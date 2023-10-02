@@ -49,7 +49,7 @@ class Domains(Base):
     zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'), nullable=False)
     name = Column(String(255), nullable=False)
     ttl = Column(Integer, default=60)
-    dclass = Column(String(2), default='IN')   
+    cls = Column(String(2), default='IN')   
     type = Column(String(10))
     data = Column(ARRAY(String))
 
@@ -68,11 +68,10 @@ class Cache(Base):
     
     uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
-    ttl = Column(Integer, default=60)
-    dclass = Column(String(2), default='IN')   
+    cls = Column(String(2), default='IN')   
     type = Column(String(10))
+    ttl = Column(Integer)
     data = Column(ARRAY(String))
-    flags = Column(String(20))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
     freeze = Column(Boolean, default=False)
@@ -139,12 +138,12 @@ class AccessDB:
                 if not qtype:
                     stmt = (select(Domains)
                             .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
-                            .filter(Domains.dclass == qclass)
+                            .filter(Domains.cls == qclass)
                     )                
                 else:
                     stmt = (select(Domains)
                         .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
-                        .filter(Domains.dclass == qclass)
+                        .filter(Domains.cls == qclass)
                         .filter(Domains.type == qtype)
                     )
                 result = conn.execute(stmt).all()
@@ -163,8 +162,8 @@ class AccessDB:
                     if ttl > 0:
                         name = record.get('name')
                         stmt = (select(Cache)
-                            .filter(or_(Cache.name == name, Cache.name == name[:-1]))
-                            .filter(Cache.dclass == record.get('rclass'))
+                            .filter(Cache.name == name)
+                            .filter(Cache.cls == record.get('cls'))
                             .filter(Cache.type == record.get('type'))
                         )
                         result = conn.execute(stmt).first()
@@ -185,7 +184,7 @@ class AccessDB:
                 if qtype == 'A':
                     stmt = (select(Cache)
                         .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
-                        .filter(Cache.dclass == qclass)
+                        .filter(Cache.cls == qclass)
                         .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
                     )
                     result = conn.execute(stmt).fetchall()
@@ -196,7 +195,7 @@ class AccessDB:
                 else:
                     stmt = (select(Cache)
                             .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
-                            .filter(Cache.dclass == qclass)
+                            .filter(Cache.cls == qclass)
                             .filter(Cache.type == qtype)
                     )
                     result = conn.execute(stmt).fetchall()
@@ -259,7 +258,7 @@ class AccessDB:
             try:
                 for rr in data:
                     if rr['type'] in ['SOA', 'CNAME']:
-                        if AccessDB.GetFromDomains(self,rr['name'],rr['dclass'],rr['type']):
+                        if AccessDB.GetFromDomains(self,rr['name'],rr['cls'],rr['type']):
                             return False
                 conn.execute(insert(Domains), data)
                 conn.commit()

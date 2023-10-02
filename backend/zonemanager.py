@@ -35,7 +35,7 @@ class Zonemaker:
         try:
             rawzones = self.db.GetFromDomains(zone=name.to_text())
             zone = []
-            [zone.append((str(obj[0].name), str(obj[0].ttl), str(obj[0].dclass), str(obj[0].type), str(obj[0].data[0]))) for obj in rawzones]
+            [zone.append((str(obj[0].name), str(obj[0].ttl), str(obj[0].cls), str(obj[0].type), str(obj[0].data[0]))) for obj in rawzones]
             #auth = "\n".join([" ".join(data) for data in zone])
             auth = dns.zone.from_text("\n".join([" ".join(data) for data in zone]), name, relativize=False)
             return auth

@@ -107,16 +107,15 @@ class Authority:
                                     break
                             if not answer: break
                             else: r.answer.append(answer)
-                    if r.answer:
-                        if rrset_au:
-                            authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
-                            r.authority.append(authority)
-                            rrset_ad_list = [findrdataset(self.auth, self.zones, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
-                            for rrset in rrset_ad_list:
-                                if rrset[1]:
-                                    additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
-                                    r.additional.append(additional) 
-                        return r.to_wire(), True
+                    if rrset_au:
+                        authority = dns.rrset.from_rdata_list(qname,rrset_au.ttl,rrset_au)
+                        r.authority.append(authority)
+                        rrset_ad_list = [findrdataset(self.auth, self.zones, dns.name.from_text(data.to_text()), dns.rdatatype.A) for data in rrset_au]
+                        for rrset in rrset_ad_list:
+                            if rrset[1]:
+                                additional = dns.rrset.from_rdata_list(rrset[0],rrset[1].ttl, rrset[1])
+                                r.additional.append(additional) 
+                    return r.to_wire(), True
                 rrset_au = zdata.get_rdataset(zdata.origin, dns.rdatatype.SOA)
                 authority = dns.rrset.from_rdata_list(zdata.origin,rrset_au.ttl,rrset_au)
                 r.set_rcode(dns.rcode.NXDOMAIN)
@@ -124,7 +123,7 @@ class Authority:
                 return r.to_wire(), True
             return None, True
         except:
-            logging.error('get data from local zones is fail')
+            logging.error('get data from local zones is fail', exc_info=True)
             return data, False
 
     def download(self, engine):
@@ -140,8 +139,12 @@ class Authority:
             for zone in zones:
                 zonedata[zone] = []
                 rawdata = db.GetFromDomains(zone=zone)
-                [zonedata[zone].append((str(obj[0].name), str(obj[0].ttl), str(obj[0].dclass), str(obj[0].type), str(obj[0].data[0]))) for obj in rawdata]
-                self.auth[zone] = dns.zone.from_text("\n".join([" ".join(data) for data in zonedata[zone]]), dns.name.from_text(zone), relativize=False)
+                for obj in rawdata:
+                    row = obj[0]
+                    for d in row.data:
+                        record = [str(row.name), str(row.ttl), str(row.cls), str(row.type), str(d)]
+                        zonedata[zone].append(record)
+                self.auth[zone] = zn = dns.zone.from_text("\n".join([" ".join(line) for line in zonedata[zone]]), dns.name.from_text(zone), relativize=False)
             for e in set(self.auth.keys()) ^ zones: self.auth.pop(e)
         except:
-            logging.error('making local zones data is fail')
+            logging.error('making local zones data is fail', exc_info=True)

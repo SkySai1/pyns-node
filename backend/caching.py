@@ -13,73 +13,34 @@ from backend.functions import getnow
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
-def packing(cache, rawdata):
+def packing(cache:DictProxy, rawdata, isrec:bool=True):
     try:
         puredata = []
         keys = set()
-        for obj in rawdata:
-            row = obj[0]
-            flags = ''
-            name = row.name.encode('idna').decode('utf-8')
-            dtype = dns.rdatatype.from_text(row.type)
-            dclass = dns.rdataclass.from_text(row.dclass)
-            q = dns.message.make_query(name, dtype, dclass)
-            key = parser(q.to_wire())
-            keys.add(key)
-            if not key in cache:
-                r = dns.message.make_response(q)
-                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-                packet = dns.message.Message.to_wire(r)
-                cache[key]=packet[2:]
-                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
-        cnametoa(cache, puredata)
-        return keys, cache
-    except:
-        logging.error('packing cache data from database into local cache bytes object is fail')  
-        return None, None
-
-def rrsetmaker(section, row):
-    try:
-        name = row.name.encode('idna').decode('utf-8')
-        dtype = dns.rdatatype.from_text(row.type)
-        dclass = dns.rdataclass.from_text(row.dclass)
-        section.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-        return section
-    except:
-        logging.error('making rrset object from database data is fail')
-        return None
-
-def cnametoa(cache, data, row=None, result=None):
-    if row:
-        #print(row)
-        for one in data: 
-            if one[0] == row[4][0]:
-                if one[3] is dns.rdatatype.CNAME:
-                    result = cnametoa(cache, data, one, result)
-                    if result: result.append(one)
-                    return result
-                elif one[3] is dns.rdatatype.A:
-                    result.append(one)
-                    return result
-                return None
-    else:
-        for one in data:
-            if one[3] is dns.rdatatype.CNAME:
-                result = []
-                result = cnametoa(cache, data, one, result)
-                if result:
-                    q = dns.message.make_query(one[0], 'A', one[2])
+        if rawdata:
+            for obj in rawdata:
+                row = obj[0]
+                name = row.name.encode('idna').decode('utf-8')
+                dtype = dns.rdatatype.from_text(row.type)
+                cls = dns.rdataclass.from_text(row.cls)
+                q = dns.message.make_query(name, dtype, cls)
+                key = parser(q.to_wire())
+                keys.add(key)
+                if not key in cache:
                     r = dns.message.make_response(q)
-                    if one[5]:
-                        r.flags = one[5]
-                    result.reverse()
-                    for rr in result: 
-                        r.answer.append(dns.rrset.from_text_list(
-                            rr[0],rr[1],rr[2],rr[3],rr[4]
-                        ))
+                    if isrec is True: r.flags += dns.flags.RA
+                    for d in row.data:
+                        d = d.split(' ')
+                        name,ttl,cls,t= d[:4]
+                        data = ' '.join(d[4:])
+                        r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
                     packet = dns.message.Message.to_wire(r)
-                    key = parser(packet)
                     cache[key]=packet[2:]
+            return keys, cache
+    except:
+        logging.error('packing cache data from database into local cache bytes object is fail', exc_info=True)  
+    finally:    
+        return None, None
 
 # --- Cahe job ---
 class Caching:
@@ -94,6 +55,8 @@ class Caching:
             self.buffexp = float(CONF['CACHING']['expire'])
             self.bufflimit = int(CONF['CACHING']['limit'])
             self.timedelta = int(CONF['GENERAL']['timedelta'])
+            self.iscache = eval(self.conf['CACHING']['download'])
+            self.isrec = eval(CONF['RECURSION']['enable']) 
         except:
             logging.critical('initialization of recursive module is fail')
 
@@ -120,9 +83,9 @@ class Caching:
 
     def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
-        result = dns.message.from_wire(data,ignore_trailing=True)
         if not key in self.cache and self.refresh > 0:
             self.cache[key] = data[2:]
+            result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True)
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
                 self.temp.append(result)
             
@@ -130,8 +93,8 @@ class Caching:
         db = AccessDB(engine, self.conf)
         # --Getting all records from cache tatble
         try:
-            if eval(self.conf['CACHING']['download']) is True:
-                keys,_ = packing(self.cache, db.GetFromCache())
+            if self.iscache is True:
+                keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
                 if keys:
                     for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
@@ -146,21 +109,19 @@ class Caching:
                 if self.temp:
                     data = []
                     for result in self.temp:
-                        Q = result.question[0]
-                        for record in result.answer:
-                            data.append({
-                                'name':record.name.to_text().encode('utf-8').decode('idna'),
-                                'ttl':record.ttl,
-                                'rclass': dns.rdataclass.to_text(record.rdclass),
-                                'type': dns.rdatatype.to_text(record.rdtype),
-                                'data':[rr.to_text() for rr in record],
-                                'flags':dns.flags.to_text(result.flags)
-                            })
-                        
+                        q = result.question[0]
+                        ttl = [record.ttl for record in result.answer]
+                        data.append({
+                            'name':q.name.to_text().encode('utf-8').decode('idna'),
+                            'cls': dns.rdataclass.to_text(q.rdclass),
+                            'type': dns.rdatatype.to_text(q.rdtype),
+                            'ttl': min(ttl),
+                            'data':[record.to_text() for record in result.answer]
+                        })                      
                     db.PutInCache(data)
                     [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('making local cache data to database storage format and uploading is fail')
+            logging.error('making local cache data to database storage format and uploading is fail', exc_info=True)
 
 
 

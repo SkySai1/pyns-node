@@ -73,7 +73,7 @@ def zonecreator():
                 "zone_id": id,
                 "name": data['name'],
                 "ttl": data['ttl'],
-                "dclass": 'IN',
+                "cls": 'IN',
                 "type": 'SOA',
                 #"data": [data['NS'], data['email'], data['serial'], data['refresh'], data['retry'], data['expire'], data['ttl']]
                 "data": [rdata]},
@@ -81,7 +81,7 @@ def zonecreator():
                 "zone_id": id,
                 "name": data['name'],
                 "ttl": data['ttl'],
-                "dclass": 'IN',
+                "cls": 'IN',
                 "type": 'NS',
                 "data": [data['NS']]}]
             Z.zonefilling(first)
@@ -177,7 +177,7 @@ def printcache(short:bool = None):
                         t.add_row(['Name', row.name])
                         t.add_row(['UUID',row.uuid])
                         t.add_row(['TTL', row.ttl]) 
-                        t.add_row(['Class',row.dclass]) 
+                        t.add_row(['Class',row.cls]) 
                         t.add_row(['Type',row.type])
                         t.add_row(['Data', row.data])
                         t.add_row(['Cached', row.cached])
