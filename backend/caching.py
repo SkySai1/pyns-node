@@ -14,32 +14,40 @@ try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
 def packing(cache, rawdata):
-    puredata = []
-    keys = set()
-    for obj in rawdata:
-        row = obj[0]
-        flags = ''
+    try:
+        puredata = []
+        keys = set()
+        for obj in rawdata:
+            row = obj[0]
+            flags = ''
+            name = row.name.encode('idna').decode('utf-8')
+            dtype = dns.rdatatype.from_text(row.type)
+            dclass = dns.rdataclass.from_text(row.dclass)
+            q = dns.message.make_query(name, dtype, dclass)
+            key = parser(q.to_wire())
+            keys.add(key)
+            if not key in cache:
+                r = dns.message.make_response(q)
+                r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+                packet = dns.message.Message.to_wire(r)
+                cache[key]=packet[2:]
+                puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
+        cnametoa(cache, puredata)
+        return keys, cache
+    except:
+        logging.error('packing cache data from database into local cache bytes object is fail')  
+        return None, None
+
+def rrsetmaker(section, row):
+    try:
         name = row.name.encode('idna').decode('utf-8')
         dtype = dns.rdatatype.from_text(row.type)
         dclass = dns.rdataclass.from_text(row.dclass)
-        q = dns.message.make_query(name, dtype, dclass)
-        key = parser(q.to_wire())
-        keys.add(key)
-        if not key in cache:
-            r = dns.message.make_response(q)
-            r.answer.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-            packet = dns.message.Message.to_wire(r)
-            cache[key]=packet[2:]
-            puredata.append((name,row.ttl,dclass,dtype,row.data,flags))
-    cnametoa(cache, puredata)
-    return keys, cache  
-
-def rrsetmaker(section, row):
-    name = row.name.encode('idna').decode('utf-8')
-    dtype = dns.rdatatype.from_text(row.type)
-    dclass = dns.rdataclass.from_text(row.dclass)
-    section.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
-    return section
+        section.append(dns.rrset.from_text_list(name,row.ttl,dclass,dtype,row.data))
+        return section
+    except:
+        logging.error('making rrset object from database data is fail')
+        return None
 
 def cnametoa(cache, data, row=None, result=None):
     if row:
@@ -76,15 +84,18 @@ def cnametoa(cache, data, row=None, result=None):
 # --- Cahe job ---
 class Caching:
     def __init__(self, CONF, CACHE:DictProxy, TEMP:ListProxy):
-        self.conf = CONF
-        self.refresh = int(CONF['DATABASE']['timesync'])
-        self.cache = CACHE
-        self.temp = TEMP
-        self.state = True
-        self.buff = list()
-        self.buffexp = float(CONF['CACHING']['expire'])
-        self.bufflimit = int(CONF['CACHING']['limit'])
-        self.timedelta = int(CONF['GENERAL']['timedelta'])
+        try:
+            self.conf = CONF
+            self.refresh = int(CONF['DATABASE']['timesync'])
+            self.cache = CACHE
+            self.temp = TEMP
+            self.state = True
+            self.buff = list()
+            self.buffexp = float(CONF['CACHING']['expire'])
+            self.bufflimit = int(CONF['CACHING']['limit'])
+            self.timedelta = int(CONF['GENERAL']['timedelta'])
+        except:
+            logging.critical('initialization of recursive module is fail')
 
     def debuff(self):
         while True:
@@ -96,8 +107,11 @@ class Caching:
             self.buff.insert(i-1, self.buff.pop(i))
 
     def get(self, data:bytes):
-        result, key, self.buff = iterater(data, self.buff)
-        if result: return result
+        try:
+            result, key, self.buff = iterater(data, self.buff)
+            if result: return result
+        except:
+            logging.warning('geting cache data from fast local cache is fail')
         result = self.cache.get(key)
         if result:
             if self.buff.__len__() > self.bufflimit: self.buff.clear()
@@ -118,9 +132,10 @@ class Caching:
         try:
             if eval(self.conf['CACHING']['download']) is True:
                 keys,_ = packing(self.cache, db.GetFromCache())
-                for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
+                if keys:
+                    for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
-            logging.error('Fail with get cache data from DB')
+            logging.error('making bytes objects from database cache data is fail')
       
 
     def upload(self, engine):
@@ -145,7 +160,7 @@ class Caching:
                     db.PutInCache(data)
                     [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('Fail with upload data to DB')
+            logging.error('making local cache data to database storage format and uploading is fail')
 
 
 

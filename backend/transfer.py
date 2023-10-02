@@ -33,55 +33,59 @@ CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
     def __init__(self, CONF, zone, target, tsig:str|None=None, keyname:str|None=None):
-        self.timedelta = int(CONF['GENERAL']['timedelta'])
-        self.conf = CONF
-        self.zone = zone
-        self.target = target
-        self.keyname = keyname
-        self.tsig = tsig
+        try:
+            self.timedelta = int(CONF['GENERAL']['timedelta'])
+            self.conf = CONF
+            self.zone = zone
+            self.target = target
+            self.keyname = keyname
+            self.tsig = tsig
+        except:
+            logging.critical('initialization of authority module is fail')
 
     def sendaxfr(self, q:dns.message.Message, transport:asyncio.Transport):
-        Z = Zonemaker(self.conf)
-        auth = Z.zonecontent(self.zone)
-        r = dns.message.make_response(q)
-        soa = None
-        for data in auth.iterate_rdatasets():
-            if data[1].rdtype is dns.rdatatype.SOA: soa = data
-            r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
-            data = r.to_wire()
-            l = data.__len__().to_bytes(2,'big')
-            transport.write(l+data)
-        #if soa: r.answer.append(dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1]))
-        if soa: 
-            r.answer = [dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1])]
-            return r.to_wire()
-        #dns.query.send_tcp(conn,r,addr)
+        try:
+            Z = Zonemaker(self.conf)
+            auth = Z.zonecontent(self.zone)
+            r = dns.message.make_response(q)
+            soa = None
+            for data in auth.iterate_rdatasets():
+                if data[1].rdtype is dns.rdatatype.SOA: soa = data
+                r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
+                data = r.to_wire()
+                l = data.__len__().to_bytes(2,'big')
+                transport.write(l+data)
+            if soa: 
+                r.answer = [dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1])]
+                return r.to_wire()
+        except:
+            logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail")
 
     def getaxfr(self):
+        if self.tsig:
+            key = dns.tsigkeyring.from_text({self.keyname:self.tsig})
+        else:
+            key = None
+        qname = dns.name.from_text(self.zone)
+        if isinstance(self.target, tuple):
+            port = self.target[1]
+            self.target = self.target[0]
+        else:
+            port = 53
         try:
-            if self.tsig:
-                key = dns.tsigkeyring.from_text({self.keyname:self.tsig})
-            else:
-                key = None
-            qname = dns.name.from_text(self.zone)
-            if isinstance(self.target, tuple):
-                port = self.target[1]
-                self.target = self.target[0]
-            else:
-                port = 53
-            try:
-                xfr = dns.query.xfr(
-                    self.target,
-                    self.zone,
-                    port=port,
-                    keyring=key,
-                    relativize=False
-                )
-                response = [data for data in xfr]
-            except (dns.tsig.PeerBadKey):
-                return False, 'The host doesn\'t knows about this key (bad keyname)'
-            except:
-                logging.exception('TRANSFER')
+            xfr = dns.query.xfr(
+                self.target,
+                self.zone,
+                port=port,
+                keyring=key,
+                relativize=False
+            )
+            response = [data for data in xfr]
+        except (dns.tsig.PeerBadKey):
+            return False, 'The host doesn\'t knows about this key (bad keyname)'
+        except:
+            logging.error(f"getting AXFR data from '{self.target}' is fail")
+        try:    
             Z = Zonemaker(self.conf)
             if response:
                 soa = response[0].answer[0][0]
@@ -102,16 +106,17 @@ class Transfer:
                                     'data':[rr.to_text() for rr in record]
                                 })
 
-                Z.zonefilling(data)
                 policy = {
                     "expire": getnow(self.timedelta, soa.expire),
                     "refresh": getnow(self.timedelta, soa.retry),
                     "retry": soa.retry
                 }
+                Z.zonefilling(data)
                 Z.zonepolicy(id, policy)
                 return True, None
             else:
                 return False, "ERROR: Fail with zone transfer for %s" % self.zone
         except:
-            logging.exception('GETAXFR FUNCTION')
-            pass
+            m = f"making AXFR data from '{self.target}' is fail"
+            logging.error(m)
+            return False, m

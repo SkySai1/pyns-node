@@ -60,9 +60,12 @@ def findrdataset(auth:DictProxy, zones:ListProxy, qname:dns.name.Name, rdtype:dn
 class Authority:
 
     def __init__(self, conf, auth:DictProxy, zones:ListProxy):
-        self.conf = conf
-        self.auth = auth
-        self.zones = zones
+        try:
+            self.conf = conf
+            self.auth = auth
+            self.zones = zones
+        except:
+            logging.critical('initialization of authority module is fail')
  
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):

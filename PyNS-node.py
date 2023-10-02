@@ -20,7 +20,7 @@ from backend.recursive import Recursive
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
-from backend.logging import logsetup
+from backend.logger import logsetup
 
 
 _COUNT = 0

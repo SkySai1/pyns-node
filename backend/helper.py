@@ -23,21 +23,23 @@ class Helper:
             pass
 
     def cacheupdate(self, engine:enginer):
-        try:
-            while True:
+        while True:
+            try:
                 self.cache.upload(engine)
                 self.cache.download(engine)
+            except:
+                logging.error('update cache data is fail')
+            finally:
                 time.sleep(self.sync)
-        except:
-            logging.exception('Uncache:')
 
     def domainupdate(self, engine:enginer):
-        try:
-            while True:
+        while True:
+            try:    
                 self.auth.download(engine)
+            except:
+                logging.exception('update zones data is fail')
+            finally:
                 time.sleep(self.sync)
-        except:
-            logging.exception('Uncache:')
 
     def unslave(self, db:AccessDB):
         try:
