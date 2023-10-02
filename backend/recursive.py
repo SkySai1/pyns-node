@@ -75,14 +75,16 @@ class Recursive:
                 depth = 0
                 result,_ = Recursive.resolve(self, query, _ROOT[i])
                 if type(result) is dns.message.QueryMessage: break
-            if result and dns.flags.AA in result.flags and not result.answer: 
-                result.set_rcode(3)
-            if not result: 
-                result = dns.message.make_response(query)
-                result.set_rcode(2)
-            #result.flags += dns.flags.RA
-            return  result.to_wire()# <- In anyway returns byte's packet and DNS Record data
-        except: # <-In any troubles at process resolving returns request with SERVFAIL code
+            if result:
+                if dns.flags.AA in result.flags:
+                    pass
+                elif not result.answer:
+                    result.set_rcode(3)
+                result.flags += dns.flags.RA
+                return  result.to_wire()
+            else:
+                raise Exception('empty recursion result') 
+        except:
             logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'')
             return echo(data,dns.rcode.SERVFAIL,[dns.flags.RA]).to_wire()
 
