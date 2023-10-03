@@ -116,46 +116,34 @@ class Join_ZonesTkeys(Base):
 
 class AccessDB:
 
-    def __init__(self, engine, _CONF):
+    def __init__(self, engine:engine, _CONF):
         self.engine = engine
         self.conf = _CONF
         self.timedelta = int(_CONF['GENERAL']['timedelta'])
-
+        self.c = Session(engine)
 
     # -- Get from Domains
-    def GetFromDomains(self, qname = None, qclass = 'IN', qtype = None, zone=None):
-        with Session(self.engine) as conn:
-            try:
-                if zone:
-                    stmt = (select(Domains).join(Zones).filter(Zones.name == zone))
-                    return conn.execute(stmt).all()
-                
-                if not qname and not qtype:
-                    result = conn.execute(select(Domains, Zones).join(Zones)).fetchall()
-                    return result
-
-                #for obj in result: print(obj)
-                if not qtype:
-                    stmt = (select(Domains)
-                            .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
-                            .filter(Domains.cls == qclass)
-                    )                
-                else:
-                    stmt = (select(Domains)
-                        .filter(or_(Domains.name == qname, Domains.name == qname[:-1]))
-                        .filter(Domains.cls == qclass)
-                        .filter(Domains.type == qtype)
+    def GetFromDomains(self, qname = None, rdclass = None, rdtype = None, zone=None):
+        try:
+            if not qname: qname = Domains.name
+            if not rdtype: rdtype = Domains.type
+            if not rdclass: rdclass = Domains.cls
+            if not zone: zone = Zones.name
+            stmt = (select(Domains).join(Zones)
+                    .filter(Domains.name == qname)
+                    .filter(Domains.type == rdtype)
+                    .filter(Domains.cls == rdclass)
+                    .filter(Zones.name == zone)
                     )
-                result = conn.execute(stmt).all()
-                return result
-            except Exception as e:
-                logging.error('retrieve domains data from database is fail')
-                return None
+            result = self.c.execute(stmt).fetchall()
+            return result
+        except Exception as e:
+            logging.error('retrieve domains data from database is fail')
+            return None
 
 
     # -- Cache functions
     def PutInCache(self, data):
-        with Session(self.engine) as conn:
             try:
                 for record in data:
                     ttl = record.get('ttl')
@@ -166,20 +154,19 @@ class AccessDB:
                             .filter(Cache.cls == record.get('cls'))
                             .filter(Cache.type == record.get('type'))
                         )
-                        result = conn.execute(stmt).first()
+                        result = self.c.execute(stmt).first()
                         if not result:
                             record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
-                            conn.execute(insert(Cache),record)
-                conn.commit()
+                            self.c.execute(insert(Cache),record)
+                self.c.commit()
             except:
                 logging.error('putting cache data to database is fail')
 
              
     def GetFromCache(self, qname = None, qclass = None, qtype = None):
-        with Session(self.engine) as conn:
             try:
                 if not qname and not qclass and not qtype:
-                    result = conn.execute(select(Cache)).fetchall()
+                    result = self.c.execute(select(Cache)).fetchall()
                     return result
                 if qtype == 'A':
                     stmt = (select(Cache)
@@ -187,90 +174,82 @@ class AccessDB:
                         .filter(Cache.cls == qclass)
                         .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
                     )
-                    result = conn.execute(stmt).fetchall()
+                    result = self.c.execute(stmt).fetchall()
                     for obj in result:
                         for row in obj:
                             if row.type == 'CNAME':
-                                result = AccessDB.getCNAME(conn, [row.name, row.data])
+                                result = AccessDB.getCNAME(self.c, [row.name, row.data])
                 else:
                     stmt = (select(Cache)
                             .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
                             .filter(Cache.cls == qclass)
                             .filter(Cache.type == qtype)
                     )
-                    result = conn.execute(stmt).fetchall()
+                    result = self.c.execute(stmt).fetchall()
                 return result
             except:
                 logging.error('getting up cache data from database is fail')
 
     def CacheExpired(self, expired):
-        with Session(self.engine) as conn:
             try:
                 stmt = (delete(Cache)
                         .filter(Cache.expired <= expired)
                         .filter(Cache.freeze == False)
                         .returning(Cache.name, Cache.type)
                 )
-                result = conn.scalars(stmt).all()
-                conn.commit()
+                result = self.c.scalars(stmt).all()
+                self.c.commit()
             except:
                 logging.error('clean cache data in database is fail')
 
     # -- Zones
     def ZoneCreate(self, data):
-        with Session(self.engine) as conn:
             stmt = insert(Zones).values(
                     name = data['name'],
                     type = data['type'],
                 ).returning(Zones.id)                
             try:
-                result = conn.scalars(stmt).one()
-                conn.commit()
+                result = self.c.scalars(stmt).one()
+                self.c.commit()
                 return result
             except Exception as e:
                 logging.error('zone create is fail')
                 return False
 
     def ZoneExpired(self, now):
-        with Session(self.engine) as conn:
-            stmt = (conn.query(Zones, Rules)
+            stmt = (self.c.query(Zones, Rules)
                     .join(Join_ZonesRules)
                     .filter(Join_ZonesRules.zone_id)
             )
 
-    def getZones(self, name = None):
-        with Session(self.engine) as conn:
+    def GetZones(self, name = None):
             try:
-                if not name:
-                    stmt = (select(Zones))
-                    result = conn.execute(stmt).all()
-                else:
-                    stmt = select(Zones).filter(Zones.name == name)
-                    result = conn.execute(stmt).fetchone()
-                return result
+                if not name: name = Zones.name
+                stmt = (select(Zones, Domains).join(Domains)
+                        .filter(Domains.type == 'SOA')
+                        .filter(Zones.name == name))
+                return self.c.execute(stmt).fetchall()
             except Exception as e:
                 logging.error('retrieve zones from database is fail')
                 return None
 
     # -- Domains
     def NewDomains(self, data:list):
-        with Session(self.engine) as conn:
             try:
                 for rr in data:
                     if rr['type'] in ['SOA', 'CNAME']:
                         if AccessDB.GetFromDomains(self,rr['name'],rr['cls'],rr['type']):
                             return False
-                conn.execute(insert(Domains), data)
-                conn.commit()
+                self.c.execute(insert(Domains), data)
+                self.c.commit()
             except:
                 logging.error('adding new domains into database is fail')
 
     # -- Rules
     def NewRules(self, data:list):
-        with Session(self.engine) as conn:
             try:
                 for row in data:
-                    check = conn.execute(
+                    check = self.c.execute(
                         select(Rules)
                         .filter(Rules.name == row['name'])
                     ).first()
@@ -291,27 +270,26 @@ class AccessDB:
                                 iszone = row['iszone']
                             )                                
                         )
-                    conn.execute(stmt)
-                conn.commit()
+                    self.c.execute(stmt)
+                self.c.commit()
             except:
                 logging.error('creating new rules is fail')
     
     def NewZoneRules(self, zoneid, data:list):
-        with Session(self.engine) as conn:
             try:
                 for name in data:
                     stmt_ruleid = (select(Rules.id)
                                 .filter(Rules.name == name)
                                 .filter(Rules.iszone == True)
                     )
-                    ruleid = conn.execute(stmt_ruleid).fetchone()
+                    ruleid = self.c.execute(stmt_ruleid).fetchone()
                     if not ruleid: return False
                     ruleid = ruleid[0]
                     check = (select(Join_ZonesRules.id)
                             .filter(Join_ZonesRules.rule_id == ruleid)
                             .filter(Join_ZonesRules.zone_id == zoneid)
                     )
-                    if conn.execute(check).first(): return False
+                    if self.c.execute(check).first(): return False
 
                     stmt = (insert(Join_ZonesRules)
                             .values(
@@ -320,8 +298,8 @@ class AccessDB:
                                 value = data[name]
                             )
                     )
-                    conn.execute(stmt)
-                    conn.commit()
+                    self.c.execute(stmt)
+                    self.c.commit()
                 return True
             except:
                 logging.error('assignment rules to zones is fail')

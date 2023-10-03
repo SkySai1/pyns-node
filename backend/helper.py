@@ -14,28 +14,31 @@ class Helper:
         self.auth = AUTH
         self.sync = float(CONF['DATABASE']['timesync'])
 
+    def connect(self, engine):
+        self.db = AccessDB(engine, self.conf)
+
     def watcher(self):
         try:
-            threading.Thread(target=Helper.cacheupdate, args=(self, enginer(self.conf))).start()
-            threading.Thread(target=Helper.domainupdate, args=(self, enginer(self.conf))).start()
+            threading.Thread(target=Helper.cacheupdate, args=(self,)).start()
+            #threading.Thread(target=Helper.domainupdate, args=(self,)).start()
             pass
         except KeyboardInterrupt: 
             pass
 
-    def cacheupdate(self, engine:enginer):
+    def cacheupdate(self):
         while True:
             try:
-                self.cache.upload(engine)
-                self.cache.download(engine)
+                self.cache.upload(self.db)
+                self.cache.download(self.db)
             except:
                 logging.error('update cache data is fail')
             finally:
                 time.sleep(self.sync)
 
-    def domainupdate(self, engine:enginer):
+    def domainupdate(self):
         while True:
             try:    
-                self.auth.download(engine)
+                self.auth.download(self.db)
             except:
                 logging.exception('update zones data is fail')
             finally:

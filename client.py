@@ -122,7 +122,7 @@ def inputer(text, what, default = False):
 
 
 def printzones():
-    zlist = db.getZones()
+    zlist = db.GetZones()
     if zlist:
         header = ['ID', 'Name', 'Type']
         width = (os.get_terminal_size().columns - 48 - header.__len__()*2 - header.__len__())

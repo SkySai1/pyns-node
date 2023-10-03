@@ -89,8 +89,7 @@ class Caching:
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
                 self.temp.append(result)
             
-    def download(self, engine):
-        db = AccessDB(engine, self.conf)
+    def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
             if self.iscache is True:
@@ -101,10 +100,9 @@ class Caching:
             logging.error('making bytes objects from database cache data is fail')
       
 
-    def upload(self, engine):
+    def upload(self, db:AccessDB):
         try:
             if eval(self.conf['CACHING']['upload']) is True:            
-                db = AccessDB(engine, self.conf) # <- Init Data Base
                 db.CacheExpired(expired=getnow(self.timedelta, 0))
                 if self.temp:
                     data = []

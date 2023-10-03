@@ -14,6 +14,7 @@ import dns.message
 import dns.name
 import dns.rdataclass
 import dns.rdatatype
+from backend.accessdb import enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
@@ -46,7 +47,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'fail with handle querie {result.question[0].to_text()}')
+        logging.error(f'fail with handle querie {result.question[0].to_text()}', exc_info=True)
         return result.to_wire()
 
 
@@ -97,7 +98,8 @@ class TCPServer(asyncio.Protocol):
         self.transport.write(l+result)
 
 
-def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, isudp:bool=True):
+def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, isudp:bool=True,):
+    _auth.connect(enginer(CONF))
     loop = asyncio.new_event_loop()
     if isudp is True:
         addr = (ip, port)
@@ -133,8 +135,8 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
         port = int(CONF['GENERAL']['listen-port'])
         l = []
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,name=current_process().name+'-UDP',args=(ip, port, _auth,_recursive,_cache, stat)).start()
-            threading.Thread(target=listener,name=current_process().name+'-TCP',args=(ip, port, _auth,_recursive,_cache, stat, False)).start()
+            threading.Thread(target=listener,name=current_process().name+'-UDP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
+            threading.Thread(target=listener,name=current_process().name+'-TCP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
         else:
             logging.error(f"{ip} is not available")
@@ -179,6 +181,7 @@ def start(CONF):
             _cache = Caching(CONF, manager.dict(), manager.list())
             _auth = Authority(CONF, manager.dict(), manager.list())
             helper = Helper(CONF, _cache, _auth)
+            helper.connect(enginer(CONF))
 
             # -Start server for each core-
             Parents = []
@@ -201,7 +204,9 @@ def start(CONF):
             for p in Stream:
                 p.join()
 
-    except KeyboardInterrupt: pass
+    except KeyboardInterrupt: 
+        for p in Stream:
+            p.terminate()
     except:
         logging.critical('some problem with starting')
         sys.exit(1)
