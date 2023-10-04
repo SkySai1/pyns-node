@@ -80,7 +80,6 @@ class Authority:
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
-            return None, False
             key = dns.tsigkeyring.from_text({
             
             })

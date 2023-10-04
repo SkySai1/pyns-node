@@ -106,10 +106,7 @@ class Recursive:
         try:
             for i in range(self.retry):
                 try:
-                    if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
-                        result = dns.query.udp(query, ns, self.timeout)
-                    else:
-                        result = dns.query.tcp(query, ns, self.timeout)
+                    result = dns.query.udp(query, ns, self.timeout)
                     break
                 except dns.exception.Timeout as e:
                     result = None
@@ -119,6 +116,8 @@ class Recursive:
                 return None, ns
             if query.id != result.id:
                 raise Exception('ID mismatch!')
+            if dns.flags.TC in result.flags:
+                result = dns.query.tcp(query, ns, self.timeout)
         except Exception:
             logging.error(f'recursion fail at \'{query.question[0].to_text()}\' querie')
             return echo(query,dns.rcode.SERVFAIL, [dns.flags.RA]), ns

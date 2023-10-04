@@ -1,11 +1,12 @@
 import datetime
 import logging
+import time
 import uuid
 import sys
 import psycopg2
 import dns.rdataclass
 import dns.rdatatype
-from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, create_engine, delete, insert, select, or_, not_, update
+from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, exc, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
 from backend.functions import getnow
 from backend.rulesmaker import makerules
@@ -15,17 +16,12 @@ from backend.recursive import QTYPE, CLASS
 Base = declarative_base()
 
 def checkconnect(engine:engine.base.Engine, conf):
-    engine.connect()
-    Base.metadata.create_all(engine)
-    data = makerules()
-    db = AccessDB(engine, conf)
     try:
-        db.NewRules(data)
-    except psycopg2.errors.UniqueViolation:
-        print('ha')
-
-
-
+        engine.connect()
+        Base.metadata.create_all(engine)
+        return True
+    except:
+        return False
 
 def enginer(_CONF):
     try:  
@@ -34,11 +30,12 @@ def enginer(_CONF):
             connect_args={'connect_timeout': 5},
             pool_pre_ping=True
         )
-        checkconnect(engine, _CONF)
-        return engine
+        if checkconnect(engine, _CONF) is True:
+            return engine
+        else: raise Exception()
     except Exception as e: 
-        logging.critical('bad connect to data base')
-        sys.exit()
+        logging.critical(f"The database is unreachable")
+        sys.exit(1)
 
 
 
@@ -118,8 +115,13 @@ class AccessDB:
     def __init__(self, engine:engine, _CONF):
         self.engine = engine
         self.conf = _CONF
+        self.sync = float(_CONF['DATABASE']['timesync'])
         self.timedelta = int(_CONF['GENERAL']['timedelta'])
         self.c = Session(engine)
+
+    def restore(self):
+        logging.error('database is unavailable')
+        self.c.rollback()   
 
     # -- Get from Domains
     def GetFromDomains(self, qname = None, rdclass = None, rdtype = None, zone=None):
@@ -138,80 +140,91 @@ class AccessDB:
             return result
         except Exception as e:
             logging.error('retrieve domains data from database is fail')
-            return None
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
 
 
     # -- Cache functions
     def PutInCache(self, data, ttl):
-            try:
-                for record in data:
-                    name = record.get('name')
-                    stmt = (select(Cache)
-                        .filter(Cache.name == name)
-                        .filter(Cache.cls == record.get('cls'))
-                        .filter(Cache.type == record.get('type'))
-                    )
-                    result = self.c.execute(stmt).first()
-                    if not result:
-                        record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
-                        self.c.execute(insert(Cache),record)
-                self.c.commit()
-            except:
-                logging.error('putting cache data to database is fail')
+        try:
+            for record in data:
+                name = record.get('name')
+                stmt = (select(Cache)
+                    .filter(Cache.name == name)
+                    .filter(Cache.cls == record.get('cls'))
+                    .filter(Cache.type == record.get('type'))
+                )
+                result = self.c.execute(stmt).first()
+                if not result:
+                    record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
+                    self.c.execute(insert(Cache),record)
+            self.c.commit()
+            return True
+        except Exception as e:
+            logging.error('upload cache data into database is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
+            return False
 
-             
+            
     def GetFromCache(self, qname = None, qclass = None, qtype = None):
-            try:
-                if not qname and not qclass and not qtype:
-                    result = self.c.execute(select(Cache)).fetchall()
-                    return result
-                if qtype == 'A':
-                    stmt = (select(Cache)
+        try:
+            if not qname and not qclass and not qtype:
+                result = self.c.execute(select(Cache)).fetchall()
+                return result
+            if qtype == 'A':
+                stmt = (select(Cache)
+                    .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
+                    .filter(Cache.cls == qclass)
+                    .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
+                )
+                result = self.c.execute(stmt).fetchall()
+                for obj in result:
+                    for row in obj:
+                        if row.type == 'CNAME':
+                            result = AccessDB.getCNAME(self.c, [row.name, row.data])
+            else:
+                stmt = (select(Cache)
                         .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
                         .filter(Cache.cls == qclass)
-                        .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
-                    )
-                    result = self.c.execute(stmt).fetchall()
-                    for obj in result:
-                        for row in obj:
-                            if row.type == 'CNAME':
-                                result = AccessDB.getCNAME(self.c, [row.name, row.data])
-                else:
-                    stmt = (select(Cache)
-                            .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
-                            .filter(Cache.cls == qclass)
-                            .filter(Cache.type == qtype)
-                    )
-                    result = self.c.execute(stmt).fetchall()
-                return result
-            except:
-                logging.error('getting up cache data from database is fail')
+                        .filter(Cache.type == qtype)
+                )
+                result = self.c.execute(stmt).fetchall()
+            return result
+        except Exception as e:
+            logging.error('download cache data from database is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
 
     def CacheExpired(self, expired):
-            try:
-                stmt = (delete(Cache)
-                        .filter(Cache.expired <= expired)
-                        .filter(Cache.freeze == False)
-                        .returning(Cache.name, Cache.type)
-                )
-                result = self.c.scalars(stmt).all()
-                self.c.commit()
-            except:
-                logging.error('clean cache data in database is fail')
+        try:
+            stmt = (delete(Cache)
+                    .filter(Cache.expired <= expired)
+                    .filter(Cache.freeze == False)
+                    .returning(Cache.name, Cache.type)
+            )
+            result = self.c.scalars(stmt).all()
+            self.c.commit()
+        except Exception as e:
+            logging.error('clean cache data in database is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
 
     # -- Zones
     def ZoneCreate(self, data):
-            stmt = insert(Zones).values(
-                    name = data['name'],
-                    type = data['type'],
-                ).returning(Zones.id)                
-            try:
-                result = self.c.scalars(stmt).one()
-                self.c.commit()
-                return result
-            except Exception as e:
-                logging.error('zone create is fail')
-                return False
+        stmt = insert(Zones).values(
+                name = data['name'],
+                type = data['type'],
+            ).returning(Zones.id)                
+        try:
+            result = self.c.scalars(stmt).one()
+            self.c.commit()
+            return result
+        except Exception as e:
+            logging.error('zone create is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
+            return False
 
     def ZoneExpired(self, now):
             stmt = (self.c.query(Zones, Rules)
@@ -220,87 +233,95 @@ class AccessDB:
             )
 
     def GetZones(self, name = None):
-            try:
-                if not name: name = Zones.name
-                stmt = (select(Zones, Domains).join(Domains)
-                        .filter(Domains.type == 'SOA')
-                        .filter(Zones.name == name))
-                return self.c.execute(stmt).fetchall()
-            except Exception as e:
-                logging.error('retrieve zones from database is fail')
-                return None
+        try:
+            if not name: name = Zones.name
+            stmt = (select(Zones, Domains).join(Domains)
+                    .filter(Domains.type == 'SOA')
+                    .filter(Zones.name == name))
+            return self.c.execute(stmt).fetchall()
+        except Exception as e:
+            logging.error('retrieve zones from database is fail', exc_info=True)
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
+            return None
 
     # -- Domains
     def NewDomains(self, data:list):
-            try:
-                for rr in data:
-                    if rr['type'] in ['SOA', 'CNAME']:
-                        if AccessDB.GetFromDomains(self,rr['name'],rr['cls'],rr['type']):
-                            return False
-                self.c.execute(insert(Domains), data)
-                self.c.commit()
-            except:
-                logging.error('adding new domains into database is fail')
+        try:
+            for rr in data:
+                if rr['type'] in ['SOA', 'CNAME']:
+                    if AccessDB.GetFromDomains(self,rr['name'],rr['cls'],rr['type']):
+                        return False
+            self.c.execute(insert(Domains), data)
+            self.c.commit()
+        except Exception as e:
+            logging.error('adding new domains into database is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
 
     # -- Rules
     def NewRules(self, data:list):
-            try:
-                for row in data:
-                    check = self.c.execute(
-                        select(Rules)
+        try:
+            for row in data:
+                check = self.c.execute(
+                    select(Rules)
+                    .filter(Rules.name == row['name'])
+                ).first()
+                if check:
+                    stmt = (
+                        update(Rules)
                         .filter(Rules.name == row['name'])
-                    ).first()
-                    if check:
-                        stmt = (
-                            update(Rules)
-                            .filter(Rules.name == row['name'])
-                            .values(
-                                name = row['name'],
-                                iszone = row['iszone']
-                            )
+                        .values(
+                            name = row['name'],
+                            iszone = row['iszone']
                         )
-                    else:
-                        stmt = (
-                            insert(Rules)
-                            .values(
-                                name = row['name'],
-                                iszone = row['iszone']
-                            )                                
-                        )
-                    self.c.execute(stmt)
-                self.c.commit()
-            except:
-                logging.error('creating new rules is fail')
+                    )
+                else:
+                    stmt = (
+                        insert(Rules)
+                        .values(
+                            name = row['name'],
+                            iszone = row['iszone']
+                        )                                
+                    )
+                self.c.execute(stmt)
+            self.c.commit()
+        except Exception as e:
+            logging.error('creating new rules is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
     
     def NewZoneRules(self, zoneid, data:list):
-            try:
-                for name in data:
-                    stmt_ruleid = (select(Rules.id)
-                                .filter(Rules.name == name)
-                                .filter(Rules.iszone == True)
-                    )
-                    ruleid = self.c.execute(stmt_ruleid).fetchone()
-                    if not ruleid: return False
-                    ruleid = ruleid[0]
-                    check = (select(Join_ZonesRules.id)
-                            .filter(Join_ZonesRules.rule_id == ruleid)
-                            .filter(Join_ZonesRules.zone_id == zoneid)
-                    )
-                    if self.c.execute(check).first(): return False
+        try:
+            for name in data:
+                stmt_ruleid = (select(Rules.id)
+                            .filter(Rules.name == name)
+                            .filter(Rules.iszone == True)
+                )
+                ruleid = self.c.execute(stmt_ruleid).fetchone()
+                if not ruleid: return False
+                ruleid = ruleid[0]
+                check = (select(Join_ZonesRules.id)
+                        .filter(Join_ZonesRules.rule_id == ruleid)
+                        .filter(Join_ZonesRules.zone_id == zoneid)
+                )
+                if self.c.execute(check).first(): return False
 
-                    stmt = (insert(Join_ZonesRules)
-                            .values(
-                                zone_id = zoneid,
-                                rule_id = ruleid,
-                                value = data[name]
-                            )
-                    )
-                    self.c.execute(stmt)
-                    self.c.commit()
-                return True
-            except:
-                logging.error('assignment rules to zones is fail')
-                return False
+                stmt = (insert(Join_ZonesRules)
+                        .values(
+                            zone_id = zoneid,
+                            rule_id = ruleid,
+                            value = data[name]
+                        )
+                )
+                self.c.execute(stmt)
+                self.c.commit()
+            return True
+        except Exception as e:
+            logging.error('assignment rules to zones is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                AccessDB.restore(self)
+            return False
             
 
 

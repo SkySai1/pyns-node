@@ -91,14 +91,14 @@ class Caching:
         if not key in self.cache and self.refresh > 0 and not dns.flags.TC in result.flags:
             self.cache[key] = data[2:]
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
-                #self.temp.append(result)
-                threading.Thread(target=Caching.upload,args=(self,self.db,result),daemon=True).start()
+                self.temp.append(result)
+                #threading.Thread(target=Caching.upload,args=(self,self.db,result),daemon=True).start()
                 #Caching.upload(self,self.db,result)
             
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
-            db.CacheExpired(expired=getnow(self.timedelta, 0))
+            #db.CacheExpired(expired=getnow(self.timedelta, 0))
             if self.iscache is True:
                 keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
                 if keys:
@@ -109,7 +109,8 @@ class Caching:
 
     def upload(self, db:AccessDB, data=None):
         try:
-            if eval(self.conf['CACHING']['upload']) is True:            
+            if eval(self.conf['CACHING']['upload']) is True:
+                print(self.temp)            
                 if data: self.temp = [data]
                 if self.temp:
                     data = []
@@ -124,8 +125,8 @@ class Caching:
                                 'data':[record.to_text() for record in result.answer]
                             })
                     if data:                      
-                        db.PutInCache(data, min(ttl))
-                    [self.temp.pop(0) for i in range(self.temp.__len__())]
+                        if db.PutInCache(data, min(ttl)) is True:
+                            [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
             logging.error('making local cache data to database storage format and uploading is fail')
 
