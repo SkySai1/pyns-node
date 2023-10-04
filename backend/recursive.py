@@ -1,4 +1,5 @@
 #!/home/dnspy/server/dns/bin/python3
+import asyncio
 import ipaddress
 import random
 import socket
@@ -61,7 +62,7 @@ class Recursive:
         except:
             logging.critical('initialization of recursive module is fail')
 
-    def recursive(self, data:bytes):
+    def recursive(self, data:bytes, transport:asyncio.Transport|asyncio.DatagramTransport):
         # - External resolving if specify external DNS server
         try:
             query = dns.message.from_wire(data,ignore_trailing=True)
@@ -73,7 +74,7 @@ class Recursive:
             global depth
             for i in range(3):
                 depth = 0
-                result,_ = Recursive.resolve(self, query, _ROOT[i])
+                result,_ = Recursive.resolve(self, query, _ROOT[i], transport)
                 if type(result) is dns.message.QueryMessage: break
             if result:
                 if dns.flags.AA in result.flags:
@@ -88,7 +89,7 @@ class Recursive:
             logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'')
             return echo(data,dns.rcode.SERVFAIL,[dns.flags.RA]).to_wire()
 
-    def resolve(self, query:dns.message.QueryMessage, ns):
+    def resolve(self, query:dns.message.QueryMessage, ns, transport):
         # -Checking current recursion depth-
         try:
             global depth
@@ -105,7 +106,10 @@ class Recursive:
         try:
             for i in range(self.retry):
                 try:
-                    result = dns.query.udp(query, ns, self.timeout)
+                    if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
+                        result = dns.query.udp(query, ns, self.timeout)
+                    else:
+                        result = dns.query.tcp(query, ns, self.timeout)
                     break
                 except dns.exception.Timeout as e:
                     result = None
@@ -127,7 +131,7 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if ipaddress.ip_address(ns).version == 4:
-                    result, ns = Recursive.resolve(self,query, ns)
+                    result, ns = Recursive.resolve(self,query, ns, transport)
                     if result and (result.rcode() in [
                         dns.rcode.NOERROR, dns.rcode.REFUSED] or dns.flags.AA in result.flags): return result, ns
             return None, ns
@@ -138,7 +142,7 @@ class Recursive:
                     qname = dns.name.from_text(str(rr))
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
-                        nsdata, _ = Recursive.resolve(self, nsquery, ns)
+                        nsdata, _ = Recursive.resolve(self, nsquery, ns, transport)
                         if nsdata:
                             if not nsdata.rcode() in [
                             dns.rcode.NOERROR, dns.rcode.REFUSED]:
@@ -147,7 +151,7 @@ class Recursive:
                                 for rr in nsdata.answer:
                                     ns = str(rr[0])
                                     if ipaddress.ip_address(ns).version == 4:
-                                        result, ns = Recursive.resolve(self, query, ns)
+                                        result, ns = Recursive.resolve(self, query, ns, transport)
                                     if result and result.rcode() in [
                                         dns.rcode.NOERROR, dns.rcode.REFUSED]: return result, ns
                                 return None, ns

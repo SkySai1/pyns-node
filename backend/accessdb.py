@@ -70,7 +70,6 @@ class Cache(Base):
     name = Column(String(255), nullable=False)
     cls = Column(String(2), default='IN')   
     type = Column(String(10))
-    ttl = Column(Integer)
     data = Column(ARRAY(String))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
@@ -143,21 +142,19 @@ class AccessDB:
 
 
     # -- Cache functions
-    def PutInCache(self, data):
+    def PutInCache(self, data, ttl):
             try:
                 for record in data:
-                    ttl = record.get('ttl')
-                    if ttl > 0:
-                        name = record.get('name')
-                        stmt = (select(Cache)
-                            .filter(Cache.name == name)
-                            .filter(Cache.cls == record.get('cls'))
-                            .filter(Cache.type == record.get('type'))
-                        )
-                        result = self.c.execute(stmt).first()
-                        if not result:
-                            record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
-                            self.c.execute(insert(Cache),record)
+                    name = record.get('name')
+                    stmt = (select(Cache)
+                        .filter(Cache.name == name)
+                        .filter(Cache.cls == record.get('cls'))
+                        .filter(Cache.type == record.get('type'))
+                    )
+                    result = self.c.execute(stmt).first()
+                    if not result:
+                        record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
+                        self.c.execute(insert(Cache),record)
                 self.c.commit()
             except:
                 logging.error('putting cache data to database is fail')

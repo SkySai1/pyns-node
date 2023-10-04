@@ -1,5 +1,6 @@
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
+import threading
 import time
 import dns.message
 import dns.rrset
@@ -60,6 +61,9 @@ class Caching:
         except:
             logging.critical('initialization of recursive module is fail')
 
+    def connect(self, engine):
+        self.db = AccessDB(engine, self.conf)
+
     def debuff(self):
         while True:
             time.sleep(self.buffexp)
@@ -83,15 +87,18 @@ class Caching:
 
     def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
-        if not key in self.cache and self.refresh > 0:
+        result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True)
+        if not key in self.cache and self.refresh > 0 and not dns.flags.TC in result.flags:
             self.cache[key] = data[2:]
-            result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True)
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
-                self.temp.append(result)
+                #self.temp.append(result)
+                threading.Thread(target=Caching.upload,args=(self,self.db,result),daemon=True).start()
+                #Caching.upload(self,self.db,result)
             
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
+            db.CacheExpired(expired=getnow(self.timedelta, 0))
             if self.iscache is True:
                 keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
                 if keys:
@@ -100,26 +107,27 @@ class Caching:
             logging.error('making bytes objects from database cache data is fail')
       
 
-    def upload(self, db:AccessDB):
+    def upload(self, db:AccessDB, data=None):
         try:
             if eval(self.conf['CACHING']['upload']) is True:            
-                db.CacheExpired(expired=getnow(self.timedelta, 0))
+                if data: self.temp = [data]
                 if self.temp:
                     data = []
                     for result in self.temp:
                         q = result.question[0]
                         ttl = [record.ttl for record in result.answer]
-                        data.append({
-                            'name':q.name.to_text().encode('utf-8').decode('idna'),
-                            'cls': dns.rdataclass.to_text(q.rdclass),
-                            'type': dns.rdatatype.to_text(q.rdtype),
-                            'ttl': min(ttl),
-                            'data':[record.to_text() for record in result.answer]
-                        })                      
-                    db.PutInCache(data)
+                        if ttl:
+                            data.append({
+                                'name':q.name.to_text().encode('utf-8').decode('idna'),
+                                'cls': dns.rdataclass.to_text(q.rdclass),
+                                'type': dns.rdatatype.to_text(q.rdtype),
+                                'data':[record.to_text() for record in result.answer]
+                            })
+                    if data:                      
+                        db.PutInCache(data, min(ttl))
                     [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('making local cache data to database storage format and uploading is fail', exc_info=True)
+            logging.error('making local cache data to database storage format and uploading is fail')
 
 
 

@@ -39,7 +39,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return result
 
         if rec is True:
-            result = recursive.recursive(data)
+            result = recursive.recursive(data, transport)
             if result:
                 threading.Thread(target=cache.put, args=(result,)).start()
                 return result
@@ -94,12 +94,10 @@ class TCPServer(asyncio.Protocol):
         addr = self.transport.get_extra_info('peername')
         result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr, self.transport)
         l = result.__len__().to_bytes(2,'big')
-        #print(int.from_bytes(l,'big'), result.__len__())
         self.transport.write(l+result)
 
 
 def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, isudp:bool=True,):
-    _auth.connect(enginer(CONF))
     loop = asyncio.new_event_loop()
     if isudp is True:
         addr = (ip, port)
@@ -121,6 +119,9 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
 
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
+    engine = enginer(CONF)
+    _auth.connect(engine)
+    _cache.connect(engine)
     # -Counter-
     stat = False
     if eval(CONF['GENERAL']['printstats']) is True:
