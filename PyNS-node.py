@@ -39,6 +39,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return result
 
         if rec is True:
+            print('R:',dns.message.from_wire(data,continue_on_error=True).question[0])
             result = recursive.recursive(data, transport)
             if result:
                 threading.Thread(target=cache.put, args=(result,)).start()

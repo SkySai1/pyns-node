@@ -119,19 +119,44 @@ class AccessDB:
         self.timedelta = int(_CONF['GENERAL']['timedelta'])
         self.c = Session(engine)
 
-    def restore(self):
-        logging.error('database is unavailable')
+    def drop(self):
+        logging.error('Database is lost connection')
         self.c.rollback()   
 
-    # -- Get from Domains
-    def GetFromDomains(self, qname = None, rdclass = None, rdtype = None, zone=None):
+    def Test(self):
+        q = 'bla.online.vtb.ru.'
+        arr = q.split('.')
+        pos = []
+        for x in range(len(arr)):
+            pos.append(".".join(arr[x:-1])+'.')
+        dcm = [".".join(arr[x:-1])+'.' for x in range(len(arr))]
+        print(dcm)
+        state = (Domains.name.in_(pos))
+        stmt = (
+            select(Domains)
+            .filter(state)
+        )
+        return self.c.execute(stmt).fetchall()
+
+    # -- Get data from Domains table
+    def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype = None, zone=None, decomposition:bool=False):
         try:
-            if not qname: qname = Domains.name
+            if decomposition is False:
+                if not qname: state = (Domains.name == Domains.name)
+                else: 
+                    if isinstance(qname,str): 
+                        state = (Domains.name == qname)
+                    elif isinstance(qname,list):
+                        state = (Domains.name.in_(qname))
+            else:
+                spl = qname.split('.')
+                decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
+                state = (Domains.name.in_(decomp))               
             if not rdtype: rdtype = Domains.type
             if not rdclass: rdclass = Domains.cls
             if not zone: zone = Zones.name
             stmt = (select(Domains).join(Zones)
-                    .filter(Domains.name == qname)
+                    .filter(state)
                     .filter(Domains.type == rdtype)
                     .filter(Domains.cls == rdclass)
                     .filter(Zones.name == zone)
@@ -139,9 +164,9 @@ class AccessDB:
             result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
-            logging.error('retrieve domains data from database is fail')
+            logging.error('Retrieve domains data from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
 
 
     # -- Cache functions
@@ -161,9 +186,9 @@ class AccessDB:
             self.c.commit()
             return True
         except Exception as e:
-            logging.error('upload cache data into database is fail')
+            logging.error('Upload cache data to database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
             return False
 
             
@@ -192,9 +217,9 @@ class AccessDB:
                 result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
-            logging.error('download cache data from database is fail')
+            logging.error('Download cache data from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
 
     def CacheExpired(self, expired):
         try:
@@ -206,9 +231,9 @@ class AccessDB:
             result = self.c.scalars(stmt).all()
             self.c.commit()
         except Exception as e:
-            logging.error('clean cache data in database is fail')
+            logging.error('Clean cache data in database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
 
     # -- Zones
     def ZoneCreate(self, data):
@@ -221,9 +246,9 @@ class AccessDB:
             self.c.commit()
             return result
         except Exception as e:
-            logging.error('zone create is fail')
+            logging.error('Zone create is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
             return False
 
     def ZoneExpired(self, now):
@@ -234,15 +259,22 @@ class AccessDB:
 
     def GetZones(self, name = None):
         try:
-            if not name: name = Zones.name
+            if not name: 
+                state = (Zones.name == Zones.name)
+            else:
+                if isinstance(name,str):
+                    state = (Zones.name == name)
+                elif isinstance(name,list):
+                    decomp = [".".join(name[x:-1])+'.' for x in range(len(name))]
+                    state = (Zones.name.in_(decomp))
             stmt = (select(Zones, Domains).join(Domains)
                     .filter(Domains.type == 'SOA')
-                    .filter(Zones.name == name))
+                    .filter(state))
             return self.c.execute(stmt).fetchall()
         except Exception as e:
-            logging.error('retrieve zones from database is fail', exc_info=True)
+            logging.error('Retrieve zones from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
             return None
 
     # -- Domains
@@ -255,9 +287,9 @@ class AccessDB:
             self.c.execute(insert(Domains), data)
             self.c.commit()
         except Exception as e:
-            logging.error('adding new domains into database is fail')
+            logging.error('Creating new domains into database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
 
     # -- Rules
     def NewRules(self, data:list):
@@ -287,9 +319,9 @@ class AccessDB:
                 self.c.execute(stmt)
             self.c.commit()
         except Exception as e:
-            logging.error('creating new rules is fail')
+            logging.error('Creating new rules into database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
     
     def NewZoneRules(self, zoneid, data:list):
         try:
@@ -318,9 +350,9 @@ class AccessDB:
                 self.c.commit()
             return True
         except Exception as e:
-            logging.error('assignment rules to zones is fail')
+            logging.error('Assignment rules to zones in database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.restore(self)
+                AccessDB.drop(self)
             return False
             
 

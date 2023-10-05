@@ -39,7 +39,7 @@ def packing(cache:DictProxy, rawdata, isrec:bool=True):
                     cache[key]=packet[2:]
             return keys, cache
     except:
-        logging.error('packing cache data from database into local cache bytes object is fail', exc_info=True)  
+        logging.error('Packing cache data is fail', exc_info=True)  
     finally:    
         return None, None
 
@@ -59,7 +59,7 @@ class Caching:
             self.iscache = eval(self.conf['CACHING']['download'])
             self.isrec = eval(CONF['RECURSION']['enable']) 
         except:
-            logging.critical('initialization of recursive module is fail')
+            logging.critical('Initialization of caching module is fail')
 
     def connect(self, engine):
         self.db = AccessDB(engine, self.conf)
@@ -78,7 +78,7 @@ class Caching:
             result, key, self.buff = iterater(data, self.buff)
             if result: return result
         except:
-            logging.warning('geting cache data from fast local cache is fail')
+            logging.warning('Geting cache data from fast local cache is fail')
         result = self.cache.get(key)
         if result:
             if self.buff.__len__() > self.bufflimit: self.buff.clear()
@@ -92,25 +92,23 @@ class Caching:
             self.cache[key] = data[2:]
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
                 self.temp.append(result)
-                #threading.Thread(target=Caching.upload,args=(self,self.db,result),daemon=True).start()
-                #Caching.upload(self,self.db,result)
             
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
-            #db.CacheExpired(expired=getnow(self.timedelta, 0))
+            #
             if self.iscache is True:
                 keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
                 if keys:
                     for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
         except:
-            logging.error('making bytes objects from database cache data is fail')
+            logging.error('Making bytes objects for local cache is fail')
       
 
     def upload(self, db:AccessDB, data=None):
         try:
-            if eval(self.conf['CACHING']['upload']) is True:
-                print(self.temp)            
+            db.CacheExpired(expired=getnow(self.timedelta, 0))
+            if eval(self.conf['CACHING']['upload']) is True:           
                 if data: self.temp = [data]
                 if self.temp:
                     data = []
@@ -128,7 +126,7 @@ class Caching:
                         if db.PutInCache(data, min(ttl)) is True:
                             [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('making local cache data to database storage format and uploading is fail')
+            logging.error('Making local cache data to database storage format and uploading it is fail')
 
 
 

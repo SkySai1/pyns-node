@@ -48,18 +48,28 @@ class Transfer:
             Z = Zonemaker(self.conf)
             auth = Z.zonecontent(self.zone)
             r = dns.message.make_response(q)
-            soa = None
-            for data in auth.iterate_rdatasets():
-                if data[1].rdtype is dns.rdatatype.SOA: soa = data
-                r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
+            #r.tsig = q.tsig
+            #print(q.tsig)
+            #print(r.tsig)
+            soa = auth.get_soa()
+            soa = [dns.rrset.from_rdata(auth.origin,soa.minimum, soa)]
+            if soa:
+                r.answer = soa
                 data = r.to_wire()
                 l = data.__len__().to_bytes(2,'big')
                 transport.write(l+data)
-            if soa: 
-                r.answer = [dns.rrset.from_rdata_list(soa[0], soa[1].ttl, soa[1])]
-                return r.to_wire()
+                for data in auth.iterate_rdatasets():
+                    if data[1].rdtype is not dns.rdatatype.SOA:
+                        r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
+                        data = r.to_wire()
+                        l = data.__len__().to_bytes(2,'big')
+                        transport.write(l+data)
+                r.answer = soa
+            return r.to_wire()
         except:
-            logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail")
+            logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail", exc_info=True)
+
+
 
     def getaxfr(self):
         if self.tsig:

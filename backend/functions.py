@@ -8,7 +8,7 @@ import dns.renderer
 def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:list=None):
     try:
         if isinstance(m,bytes):
-            m = dns.message.from_wire(m,ignore_trailing=True)
+            m = dns.message.from_wire(m,ignore_trailing=True,continue_on_error=True)
         result = dns.message.make_response(m)
         result.set_rcode(state)
         if flags:
