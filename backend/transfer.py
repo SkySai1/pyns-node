@@ -32,39 +32,45 @@ QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
 CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
-    def __init__(self, CONF, zone, target, tsig:str|None=None, keyname:str|None=None):
+    def __init__(self, CONF, zone, target, tsig:str|dict|None=None, keyname:str|None=None, algorithm=None):
         try:
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.conf = CONF
             self.zone = zone
             self.target = target
-            self.keyname = keyname
             self.tsig = tsig
+            self.keyname = keyname
+            self.alogorithm = algorithm
         except:
             logging.critical('initialization of authority module is fail')
+
+    def writer(self, r:dns.message.Message, transport:asyncio.Transport, tsig_ctx=None):
+        data = r.to_wire(multi=True, tsig_ctx=tsig_ctx)
+        l = data.__len__().to_bytes(2,'big')
+        transport.write(l+data)
 
     def sendaxfr(self, q:dns.message.Message, transport:asyncio.Transport):
         try:
             Z = Zonemaker(self.conf)
-            auth = Z.zonecontent(self.zone)
+            zone = Z.zonecontent(self.zone)
             r = dns.message.make_response(q)
-            #r.tsig = q.tsig
-            #print(q.tsig)
-            #print(r.tsig)
-            soa = auth.get_soa()
-            soa = [dns.rrset.from_rdata(auth.origin,soa.minimum, soa)]
-            if soa:
-                r.answer = soa
-                data = r.to_wire()
-                l = data.__len__().to_bytes(2,'big')
-                transport.write(l+data)
-                for data in auth.iterate_rdatasets():
-                    if data[1].rdtype is not dns.rdatatype.SOA:
-                        r.answer = [dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])]
-                        data = r.to_wire()
-                        l = data.__len__().to_bytes(2,'big')
-                        transport.write(l+data)
-                r.answer = soa
+
+            soa = zone.get_soa()
+            rrsoa = dns.rrset.from_rdata(zone.origin,soa.minimum, soa)
+
+            r.answer = [rrsoa]
+            Transfer.writer(self,r,transport)
+            
+            for data in zone.iterate_rdatasets():
+                if data[1].rdtype is not dns.rdatatype.SOA:
+
+                    rrset = dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])
+                    r.answer = [rrset]
+
+                    Transfer.writer(self,r,transport,r.tsig_ctx)
+
+            r.answer = [rrsoa]
+            Transfer.writer(self,r,transport,r.tsig_ctx)
             return r.to_wire()
         except:
             logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail", exc_info=True)

@@ -128,7 +128,7 @@ class Authority:
             qtype = q.question[0].rdtype
             if qtype == 252 and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
-                    T = Transfer(self.conf, qname, addr, key)
+                    T = Transfer(self.conf, qname, addr, key, q.keyname, q.keyalgorithm)
                     return T.sendaxfr(q,transport), False
                 except:
                     logging.error('Sending transfer was failed')
@@ -154,6 +154,8 @@ class Authority:
                     add = Authority.findadd(self,targets)
                     r.additional = Authority.filling(self,add)
             try:
+                #r.tsig = q.tsig
+                print('A:', r.question[0], r.tsig)
                 return r.to_wire(), False
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
