@@ -9,6 +9,7 @@ import dns.rdataclass
 import dns.rcode
 import dns.name
 import dns.flags
+import sys
 from backend.accessdb import AccessDB
 from backend.functions import getnow
 try: from backend.cparser import parser, iterater
@@ -52,9 +53,9 @@ class Caching:
             self.cache = CACHE
             self.temp = TEMP
             self.state = True
-            self.buff = list()
+            self.buff = {}#list()
             self.buffexp = float(CONF['CACHING']['expire'])
-            self.bufflimit = int(CONF['CACHING']['limit'])
+            self.bufflimit = int(CONF['CACHING']['size'])
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.iscache = eval(self.conf['CACHING']['download'])
             self.isrec = eval(CONF['RECURSION']['enable']) 
@@ -75,19 +76,21 @@ class Caching:
 
     def get(self, data:bytes):
         try:
-            result, key, self.buff = iterater(data, self.buff)
+            result, key = iterater(data, self.buff)
             if result: return result
         except:
             logging.warning('Geting cache data from fast local cache is fail')
         result = self.cache.get(key)
         if result:
-            if self.buff.__len__() > self.bufflimit: self.buff.clear()
-            self.buff.append(result)
+            if sys.getsizeof(self.buff) > self.bufflimit:
+                print(sys.getsizeof(self.buff), self.bufflimit) 
+                a = self.buff.pop(list(self.buff.keys())[0])
+            self.buff[key] = result
         return result
 
     def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
-        result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True)
+        result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True, continue_on_error=True)
         if not key in self.cache and self.refresh > 0:
             result.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.cache[key] = result.to_wire()[2:]

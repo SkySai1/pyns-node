@@ -10,7 +10,7 @@ import ipaddress
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'AUTHORITY': [],
-    'CACHING': ['expire', 'limit', 'download', 'upload'],
+    'CACHING': ['expire', 'size', 'download', 'upload'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
     'LOGGING' : ['enable', 'keeping', 'pathway' , 'minimum', 'separate', 'maxsize']
@@ -43,7 +43,7 @@ def checkconf(CONF:configparser.ConfigParser):
                     if opt[0] == 'listen-port': int(opt[1])
                     if opt[0] == 'printstats': eval(opt[1])
                     if opt[0] == 'expire': float(opt[1])
-                    if opt[0] == 'limit': int(opt[1])
+                    if opt[0] == 'size': int(opt[1])
                     if opt[0] == 'enable': eval(opt[1])
                     if opt[0] == 'resolver' and opt[1] != '': ipaddress.ip_address(opt[1]).version == 4
                     if opt[0] == 'maxdepth': int(opt[1])
@@ -111,8 +111,8 @@ def deafultconf():
     config['CACHING'] = {
         ";Time to clear of 1st lvl cache":None,
         'expire': 5,
-        ";Max records in 1st lvl cache":None,
-        'limit': 100,
+        ";Max size of core cache (cache data per core) in bytes":None,
+        'size': 1048576,
         ";Is to download cache data from node into DB = False|True":None,
         'download': True,
         ";Is to upload cache data from DB into node = False|True":None,

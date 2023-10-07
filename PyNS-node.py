@@ -226,7 +226,7 @@ if __name__ == "__main__":
         if state is False:
             raise Exception()
     except:
-        logging.exception('Error with manual start')
+        logging.critical('Error with manual start')
         sys.exit(1)
     start(CONF)
 
