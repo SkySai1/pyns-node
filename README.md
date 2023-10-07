@@ -132,6 +132,10 @@ enable = True
 - ✅ **Made authority download with Authoriry and Additional Sections** *For existing domain, if domain is not exist made authority with single SOA record.Done*
 - ✅ **CNAME construct via all zones** *Done.*
 - ✅ **Return zones via transfer** *Done. Need to realese download keys from DB*
+- ✅ **Return zones via transfer with TSIG** *Done. It's finily working!*
+- ✅ **CNAME maker across zones** *For A querie response with CNAME hierarchy* 
+- 🚩 **CNAME recursion** *Recursion search if rdata is not exist in database*
+- 🚩 **Authoirty former** *Make authoirty information for answer records*
 - 🚩 **Politics and settings for zones** ... 
 - 🚩 **TSIG keeping with zones binding** ...
 - 🚩 **Retransfer and zone purging** ...
