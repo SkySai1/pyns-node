@@ -88,15 +88,15 @@ class Caching:
     def put(self, data:bytes, isupload:bool=True):
         key = parser(data)
         result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True)
-        if not key in self.cache and self.refresh > 0 and not dns.flags.TC in result.flags:
-            self.cache[key] = data[2:]
+        if not key in self.cache and self.refresh > 0:
+            result.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
+            self.cache[key] = result.to_wire()[2:]
             if result.rcode() is dns.rcode.NOERROR and isupload is True:
                 self.temp.append(result)
             
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
-            #
             if self.iscache is True:
                 keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
                 if keys:
