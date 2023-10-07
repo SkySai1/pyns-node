@@ -109,7 +109,7 @@ def deafultconf():
 
     }
     config['CACHING'] = {
-        ";Time to clear of 1st lvl cache":None,
+        ";Time to clear of core cache data":None,
         'expire': 5,
         ";Max size of core cache (cache data per core) in bytes":None,
         'size': 1048576,
