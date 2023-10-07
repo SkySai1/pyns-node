@@ -57,7 +57,7 @@ class Authority:
             zones.reverse()
             for e in zones:
                 if q.name.is_subdomain(dns.name.from_text(e)):
-                    auth, state = Authority.findauth(self,q,e)
+                    auth, state = Authority.findauth(self,q.name.to_text(),e)
                     rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass,rdtype=rdtype,zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
@@ -65,8 +65,7 @@ class Authority:
                     return node, e, auth, state
         return None, None, None, None
 
-    def findauth(self, q:dns.rrset.RRset, zone):
-        name = q.name.to_text()
+    def findauth(self, name:str, zone):
         rawdata = self.db.GetFromDomains(qname=name,rdtype='NS',zone=zone, decomposition=True)
         auth=[]
         high = ''
@@ -109,13 +108,23 @@ class Authority:
                 )                   
         return content
     
-    def findcname(self,qname:dns.name.Name):
-        name = qname.to_text()
-        rawdata = self.db.GetFromDomains(qname=name, rdtype='CNAME')
+    def findcname(self,name:str,qtype:str, search:list=[]):
+        rawdata = self.db.GetFromDomains(qname=name, rdtype=[qtype, 'CNAME'])
         if rawdata:
-            data = [obj[0] for obj in rawdata]
-            return Authority.filling(self,data)
-
+            for obj in rawdata:
+                row = obj[0]
+                #print(row.name, row.type, row.data)
+                if row.type == 'CNAME':
+                    search.append(row)
+                    search = Authority.findcname(self,row.data[0],qtype, search)
+                else:
+                    if row.type == qtype:
+                        search.append(row)
+            return search
+        elif search:
+            pass
+            #print(search[-1].name)
+        return search
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
@@ -123,7 +132,6 @@ class Authority:
                 "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs="
             })
             q = dns.message.from_wire(data, ignore_trailing=True, keyring=key)
-            print(q.question[0])
             qname = q.question[0].name
             qtype = q.question[0].rdtype
             if qtype == 252 and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
@@ -141,9 +149,15 @@ class Authority:
                 if node:
                     r.answer = Authority.filling(self,node,qtype)
                 else:
-                    if qtype in[1,28]:
-                        r.answer = Authority.findcname(self,qname)
-                if not r.answer:
+                    data = Authority.findcname(self,qname.to_text(), dns.rdatatype.to_text(qtype), [])
+                    if state is True:
+                        for row in data:
+                            r.answer.append(
+                                dns.rrset.from_text_list(row.name, row.ttl, row.cls, row.type, row.data)
+                            )
+                    else:
+                        r.authority = Authority.filling(self,auth)
+                if not r.answer and not r.authority:
                     r.set_rcode(dns.rcode.NXDOMAIN)
                     r = Authority.fakezone(self,q,zone)
             else:
@@ -154,13 +168,11 @@ class Authority:
                     add = Authority.findadd(self,targets)
                     r.additional = Authority.filling(self,add)
             try:
-                #r.tsig = q.tsig
-                print('A:', r.question[0], r.tsig)
-                return r.to_wire(), False
+                return r.to_wire(), True
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
                     r = echo(data,flags=[dns.flags.TC])
-                    return r.to_wire(), False
+                    return r.to_wire(), True
                 elif isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                     return r.to_wire(max_size=65535), True
             

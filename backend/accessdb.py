@@ -139,7 +139,7 @@ class AccessDB:
         return self.c.execute(stmt).fetchall()
 
     # -- Get data from Domains table
-    def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype = None, zone=None, decomposition:bool=False):
+    def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype:str|list = None, zone=None, decomposition:bool=False):
         try:
             if decomposition is False:
                 if not qname: state = (Domains.name == Domains.name)
@@ -152,12 +152,17 @@ class AccessDB:
                 spl = qname.split('.')
                 decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
                 state = (Domains.name.in_(decomp))               
-            if not rdtype: rdtype = Domains.type
+            if not rdtype: rdtype = (Domains.type == Domains.type)
+            else:
+                if isinstance(rdtype,str): 
+                    rdtype = (Domains.type == rdtype)
+                elif isinstance(rdtype,list):
+                    rdtype = (Domains.type.in_(rdtype))                
             if not rdclass: rdclass = Domains.cls
             if not zone: zone = Zones.name
-            stmt = (select(Domains).join(Zones)
+            stmt = (select(Domains, Zones.name).join(Zones)
                     .filter(state)
-                    .filter(Domains.type == rdtype)
+                    .filter(rdtype)
                     .filter(Domains.cls == rdclass)
                     .filter(Zones.name == zone)
                     )
