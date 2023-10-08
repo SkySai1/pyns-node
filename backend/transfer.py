@@ -13,6 +13,7 @@ import dns.name
 import dns.message
 import dns.tsig
 import dns.rrset
+import dns.xfr
 #from PyDNS import create_engine
 from backend.functions import getnow
 from backend.zonemanager import Zonemaker
@@ -88,50 +89,47 @@ class Transfer:
             self.target = self.target[0]
         else:
             port = 53
-        try:
-            xfr = dns.query.xfr(
-                self.target,
-                self.zone,
-                port=port,
-                keyring=key,
-                relativize=False
-            )
-            response = [data for data in xfr]
-        except (dns.tsig.PeerBadKey):
-            return False, 'The host doesn\'t knows about this key (bad keyname)'
-        except:
-            logging.error(f"getting AXFR data from '{self.target}' is fail")
+        i = 0
+        while i < 3:
+            try:
+                zone = dns.zone.Zone(self.zone,relativize=False)
+                q,_ = dns.xfr.make_query(zone, keyring=key, keyname=self.keyname)
+                dns.query.inbound_xfr(self.target, zone, q)
+                soa = zone.get_soa()
+                break
+            except (dns.tsig.PeerBadKey):
+                return False, 'The host doesn\'t knows about this key (bad keyname)'
+            except:
+                logging.error(f"getting AXFR data from '{self.target}' is fail", exc_info=True)
+                i += 1
         try:    
             Z = Zonemaker(self.conf)
-            if response:
-                soa = response[0].answer[0][0]
-                id = Z.zonecreate({
-                    'name' : response[0].question[0].name.to_text(),
-                    'type' : 'slave'
+            id = Z.zonecreate({
+                'name' : zone.origin.to_text(),
+                'type' : 'slave'
+            })
+            if id is False: raise Exception
+            data = []
+            for part in zone.iterate_rdatasets():
+                name = part[0]
+                rdata = part[1]
+                data.append({
+                    'zone_id': id,
+                    'name':name.to_text(),
+                    'ttl':rdata.ttl,
+                    'cls': dns.rdataclass.to_text(rdata.rdclass),
+                    'type': dns.rdatatype.to_text(rdata.rdtype),
+                    'data':[d.to_text() for d in rdata]
                 })
-                data = []
-                for part in response:
-                        if part and part.answer:
-                            for record in part.answer[:-1]:
-                                data.append({
-                                    'zone_id': id,
-                                    'name':record.name.to_text(),
-                                    'ttl':record.ttl,
-                                    'cls': dns.rdataclass.to_text(record.rdclass),
-                                    'type': dns.rdatatype.to_text(record.rdtype),
-                                    'data':[rr.to_text() for rr in record]
-                                })
 
-                policy = {
-                    "expire": getnow(self.timedelta, soa.expire),
-                    "refresh": getnow(self.timedelta, soa.retry),
-                    "retry": soa.retry
-                }
-                Z.zonefilling(data)
-                Z.zonepolicy(id, policy)
-                return True, None
-            else:
-                return False, "ERROR: Fail with zone transfer for %s" % self.zone
+            policy = {
+                "expire": getnow(self.timedelta, soa.expire),
+                "refresh": getnow(self.timedelta, soa.retry),
+                "retry": soa.retry
+            }
+            Z.zonefilling(data)
+            Z.zonepolicy(id, policy)
+            return True, None
         except:
             m = f"making AXFR data from '{self.target}' is fail"
             logging.error(m)

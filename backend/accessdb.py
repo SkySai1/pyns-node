@@ -251,7 +251,7 @@ class AccessDB:
             self.c.commit()
             return result
         except Exception as e:
-            logging.error('Zone create is fail')
+            logging.error(f"Add zone {data['name']} into database is fail")
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 AccessDB.drop(self)
             return False
@@ -285,14 +285,10 @@ class AccessDB:
     # -- Domains
     def NewDomains(self, data:list):
         try:
-            for rr in data:
-                if rr['type'] in ['SOA', 'CNAME']:
-                    if AccessDB.GetFromDomains(self,rr['name'],rr['cls'],rr['type']):
-                        return False
             self.c.execute(insert(Domains), data)
             self.c.commit()
         except Exception as e:
-            logging.error('Creating new domains into database is fail')
+            logging.error('Creating new domains into database is fail', exc_info=True)
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 AccessDB.drop(self)
 

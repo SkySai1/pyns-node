@@ -144,38 +144,42 @@ class Authority:
             node, zone, auth, state = Authority.findnode(self, qname, qclass)
             if not zone: return None, True
             r = dns.message.make_response(q)
-            if state and state is True:
-                r.flags += dns.flags.AA
-                if node:
-                    #for e in node: print(e.name, e.type, e.data)
-                    r.answer = Authority.filling(self,node,[qtype, 'CNAME'])
-                    if r.answer:
-                        while r.answer[-1].rdtype is dns.rdatatype.CNAME:
-                            cname = dns.name.from_text(r.answer[-1][0].to_text())
-                            crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                            cnode, zone, auth, state = Authority.findnode(self, cname, crdclass)
-                            if state and state is True:
-                                r.answer += Authority.filling(self, cnode, [qtype, 'CNAME'])
-                            elif auth:
-                                targets = []
-                                r.authority = Authority.filling(self,auth)                  
-                                targets = [ns for a in auth for ns in a.data]
-                                if targets:
-                                    add = Authority.findadd(self,targets)
-                                    r.additional = Authority.filling(self,add)
-                                break
-                            else:
-                                break 
-                if not r.answer and not r.authority:
-                    r.set_rcode(dns.rcode.NXDOMAIN)
-                    r = Authority.fakezone(self,q,zone)
-            elif auth:
-                targets = []
-                r.authority = Authority.filling(self,auth)                  
-                targets = [ns for a in auth for ns in a.data]
-                if targets:
-                    add = Authority.findadd(self,targets)
-                    r.additional = Authority.filling(self,add)
+            if state is not None:
+                if state is True:
+                    r.flags += dns.flags.AA
+                    if node:
+                        #for e in node: print(e.name, e.type, e.data)
+                        r.answer = Authority.filling(self,node,[qtype, 'CNAME'])
+                        if r.answer:
+                            while r.answer[-1].rdtype is dns.rdatatype.CNAME:
+                                cname = dns.name.from_text(r.answer[-1][0].to_text())
+                                crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
+                                cnode, zone, auth, state = Authority.findnode(self, cname, crdclass)
+                                if cnode:
+                                    if state:
+                                        r.answer += Authority.filling(self, cnode, [qtype, 'CNAME'])
+                                    else: break
+                                    '''elif auth:
+                                        targets = []
+                                        r.authority = Authority.filling(self,auth)                  
+                                        targets = [ns for a in auth for ns in a.data]
+                                        if targets:
+                                            add = Authority.findadd(self,targets)
+                                            r.additional = Authority.filling(self,add)
+                                        break'''
+                                        
+                                else:
+                                    break 
+                    if not r.answer and not r.authority:
+                        r.set_rcode(dns.rcode.NXDOMAIN)
+                        r = Authority.fakezone(self,q,zone)
+                if state is False and auth:
+                    targets = []
+                    r.authority = Authority.filling(self,auth)                  
+                    targets = [ns for a in auth for ns in a.data]
+                    if targets:
+                        add = Authority.findadd(self,targets)
+                        r.additional = Authority.filling(self,add)
             try:
                 return r.to_wire(), False
             except dns.exception.TooBig:

@@ -130,12 +130,11 @@ def printzones():
         t._max_width = {'ID': 5, 'Name':width, 'Type': 7}
         t.align = 'l'
         for obj in zlist:
-            for row in obj:
-                try:
-                    t.add_row([row.id, row.name, row.type])
-                except:
-                    logging.exception('zone table')
-                break
+            row = obj[0]
+            try:
+                t.add_row([row.id, row.name, row.type])
+            except:
+                logging.exception('zone table')
         print(t)
     action = int(input("Choose action:\n 0. Return to back\n 1. Create new zone\n"))
     selectel(action, [MainMenu, zonecreator])
