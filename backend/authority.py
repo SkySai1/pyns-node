@@ -45,10 +45,8 @@ class Authority:
         self.db = AccessDB(engine, self.conf)
 
 
-    def findnode(self, q:dns.rrset.RRset):
-        name = q.name.to_text()
-        rdtype = dns.rdatatype.to_text(q.rdtype)
-        rdclass = dns.rdataclass.to_text(q.rdclass)
+    def findnode(self, qname:dns.name.Name, rdclass:str):
+        name = qname.to_text()
         zones = []
         rawzones = self.db.GetZones(name.split("."))
         if rawzones:
@@ -56,9 +54,9 @@ class Authority:
             zones.sort()
             zones.reverse()
             for e in zones:
-                if q.name.is_subdomain(dns.name.from_text(e)):
-                    auth, state = Authority.findauth(self,q.name.to_text(),e)
-                    rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass,rdtype=rdtype,zone=e)
+                if qname.is_subdomain(dns.name.from_text(e)):
+                    auth, state = Authority.findauth(self,qname.to_text(),e)
+                    rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
                     else: node = None
@@ -99,10 +97,11 @@ class Authority:
                 response.set_rcode(dns.rcode.NXDOMAIN)
             return response
 
-    def filling(self, data, qtype=None):
+    def filling(self, data, qtype:str|list=None):
+        if isinstance(qtype,str): qtype = [qtype]
         content = []
         for a in data:
-            if not qtype or a.type == dns.rdatatype.to_text(qtype):
+            if not qtype or a.type in qtype:
                 content.append(
                     dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
                 )                   
@@ -133,34 +132,44 @@ class Authority:
             })
             q = dns.message.from_wire(data, ignore_trailing=True, keyring=key)
             qname = q.question[0].name
-            qtype = q.question[0].rdtype
-            if qtype == 252 and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
+            qtype = dns.rdatatype.to_text(q.question[0].rdtype)
+            qclass = dns.rdataclass.to_text(q.question[0].rdclass)
+            if qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
                     T = Transfer(self.conf, qname, addr, key, q.keyname, q.keyalgorithm)
                     return T.sendaxfr(q,transport), False
                 except:
                     logging.error('Sending transfer was failed')
                     return echo(data,dns.rcode.SERVFAIL)
-            node, zone, auth, state = Authority.findnode(self,q.question[0])
-            if not zone: return None, False
+            node, zone, auth, state = Authority.findnode(self, qname, qclass)
+            if not zone: return None, True
             r = dns.message.make_response(q)
-            if state is True:
+            if state and state is True:
                 r.flags += dns.flags.AA
                 if node:
-                    r.answer = Authority.filling(self,node,qtype)
-                else:
-                    data = Authority.findcname(self,qname.to_text(), dns.rdatatype.to_text(qtype), [])
-                    if state is True:
-                        for row in data:
-                            r.answer.append(
-                                dns.rrset.from_text_list(row.name, row.ttl, row.cls, row.type, row.data)
-                            )
-                    else:
-                        r.authority = Authority.filling(self,auth)
+                    #for e in node: print(e.name, e.type, e.data)
+                    r.answer = Authority.filling(self,node,[qtype, 'CNAME'])
+                    if r.answer:
+                        while r.answer[-1].rdtype is dns.rdatatype.CNAME:
+                            cname = dns.name.from_text(r.answer[-1][0].to_text())
+                            crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
+                            cnode, zone, auth, state = Authority.findnode(self, cname, crdclass)
+                            if state and state is True:
+                                r.answer += Authority.filling(self, cnode, [qtype, 'CNAME'])
+                            elif auth:
+                                targets = []
+                                r.authority = Authority.filling(self,auth)                  
+                                targets = [ns for a in auth for ns in a.data]
+                                if targets:
+                                    add = Authority.findadd(self,targets)
+                                    r.additional = Authority.filling(self,add)
+                                break
+                            else:
+                                break 
                 if not r.answer and not r.authority:
                     r.set_rcode(dns.rcode.NXDOMAIN)
                     r = Authority.fakezone(self,q,zone)
-            else:
+            elif auth:
                 targets = []
                 r.authority = Authority.filling(self,auth)                  
                 targets = [ns for a in auth for ns in a.data]
@@ -168,7 +177,7 @@ class Authority:
                     add = Authority.findadd(self,targets)
                     r.additional = Authority.filling(self,add)
             try:
-                return r.to_wire(), True
+                return r.to_wire(), False
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
                     r = echo(data,flags=[dns.flags.TC])
