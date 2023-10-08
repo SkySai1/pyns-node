@@ -86,7 +86,7 @@ class Recursive:
             else:
                 raise Exception('empty recursion result') 
         except:
-            logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'')
+            logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'',exc_info=True)
             return echo(data,dns.rcode.SERVFAIL,[dns.flags.RA]).to_wire()
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport):
@@ -121,6 +121,17 @@ class Recursive:
         except Exception:
             logging.error(f'recursion fail at \'{query.question[0].to_text()}\' querie')
             return echo(query,dns.rcode.SERVFAIL, [dns.flags.RA]), ns
+
+        if result.answer:
+            if result.answer[-1].rdtype != result.question[0].rdtype and result.answer[-1].rdtype == 5:
+                qcname = dns.message.make_query(
+                    result.answer[-1][0].to_text(),
+                    result.question[0].rdtype,
+                    result.question[0].rdclass
+                )
+                cname_res, _ = Recursive.resolve(self, qcname, random.choice(_ROOT), transport)
+                if cname_res.answer:
+                    [result.answer.append(rrset) for rrset in cname_res.answer]
 
         if result.answer or dns.flags.AA in result.flags:
             return result, ns # <- If got a rdata then return it
