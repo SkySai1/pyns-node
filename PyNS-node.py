@@ -178,8 +178,8 @@ def start(CONF):
             # -Init Classes
             
             _cache = Caching(CONF, manager.dict(), manager.list())
-            _auth = Authority(CONF, manager.dict(), manager.list())
             _recursive = Recursive(CONF)
+            _auth = Authority(CONF, _recursive, manager.dict(), manager.list())
             helper = Helper(CONF, _cache, _auth)
             helper.connect(enginer(CONF))
 

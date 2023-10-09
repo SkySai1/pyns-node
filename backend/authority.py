@@ -34,9 +34,10 @@ def findrdataset(auth:DictProxy, zones:ListProxy, qname:dns.name.Name, rdtype:dn
 
 class Authority:
 
-    def __init__(self, conf, auth:DictProxy, zones:ListProxy):
+    def __init__(self, conf, _rec:Recursive, auth:DictProxy, zones:ListProxy):
         try:
             self.conf = conf
+            self.recursive = _rec
             self.auth = auth
             self.zones = zones
         except:
@@ -108,12 +109,17 @@ class Authority:
                 )                   
         return content
     
-    def findcname(self,name:str,qtype:str, search:list=[]):
-        recurisve = Recursive(self.conf)
-        recurisve.recursive()
+    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
+        q = dns.message.make_query(cname,qtype,qcls)
+        _,r,_ = self.recursive.recursive(q,transport)
+        if r:
+            return r.answer
+        else:
+            return []
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
+            isrec = True
             key = dns.tsigkeyring.from_text({
                 "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs="
             })
@@ -145,18 +151,11 @@ class Authority:
                                 if cnode:
                                     if state:
                                         r.answer += Authority.filling(self, cnode, [qtype, 'CNAME'])
-                                    else: break
-                                    '''elif auth:
-                                        targets = []
-                                        r.authority = Authority.filling(self,auth)                  
-                                        targets = [ns for a in auth for ns in a.data]
-                                        if targets:
-                                            add = Authority.findadd(self,targets)
-                                            r.additional = Authority.filling(self,add)
-                                        break'''
-                                        
-                                else:
+                                elif isrec:
+                                    r.answer += Authority.findcname(self, cname, qtype, qclass, transport)  
                                     break 
+                                else:
+                                    break
                     if not r.answer and not r.authority:
                         r.set_rcode(dns.rcode.NXDOMAIN)
                         r = Authority.fakezone(self,q,zone)
@@ -168,7 +167,7 @@ class Authority:
                         add = Authority.findadd(self,targets)
                         r.additional = Authority.filling(self,add)
             try:
-                return r.to_wire(), r, False
+                return r.to_wire(), r, True
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
                     r = echo(data,flags=[dns.flags.TC])
