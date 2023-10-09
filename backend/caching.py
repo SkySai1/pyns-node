@@ -88,14 +88,14 @@ class Caching:
             self.buff[key] = result
         return result
 
-    def put(self, data:bytes, isupload:bool=True):
+    def put(self, data:bytes, response:dns.message.Message, isupload:bool=True):
         key = parser(data)
-        result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True, continue_on_error=True)
+        #result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True, continue_on_error=True)
         if not key in self.cache and self.refresh > 0:
-            result.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
-            self.cache[key] = result.to_wire()[2:]
-            if result.rcode() is dns.rcode.NOERROR and isupload is True:
-                self.temp.append(result)
+            response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
+            self.cache[key] = data[2:]
+            if isupload is True:
+                self.temp.append(response)
             
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble

@@ -4,6 +4,7 @@ from multiprocessing.managers import DictProxy, ListProxy
 from backend.accessdb import AccessDB, enginer
 from backend.functions import echo, toobig
 from backend.transfer import Transfer
+from backend.recursive import Recursive
 import time
 import dns.message
 import dns.rrset
@@ -108,22 +109,8 @@ class Authority:
         return content
     
     def findcname(self,name:str,qtype:str, search:list=[]):
-        rawdata = self.db.GetFromDomains(qname=name, rdtype=[qtype, 'CNAME'])
-        if rawdata:
-            for obj in rawdata:
-                row = obj[0]
-                #print(row.name, row.type, row.data)
-                if row.type == 'CNAME':
-                    search.append(row)
-                    search = Authority.findcname(self,row.data[0],qtype, search)
-                else:
-                    if row.type == qtype:
-                        search.append(row)
-            return search
-        elif search:
-            pass
-            #print(search[-1].name)
-        return search
+        recurisve = Recursive(self.conf)
+        recurisve.recursive()
 
     def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
         try:
@@ -137,12 +124,12 @@ class Authority:
             if qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
                     T = Transfer(self.conf, qname, addr, key, q.keyname, q.keyalgorithm)
-                    return T.sendaxfr(q,transport), False
+                    return T.sendaxfr(q,transport), None, False
                 except:
                     logging.error('Sending transfer was failed')
                     return echo(data,dns.rcode.SERVFAIL)
             node, zone, auth, state = Authority.findnode(self, qname, qclass)
-            if not zone: return None, True
+            if not zone: return None, None, False
             r = dns.message.make_response(q)
             if state is not None:
                 if state is True:
@@ -181,13 +168,13 @@ class Authority:
                         add = Authority.findadd(self,targets)
                         r.additional = Authority.filling(self,add)
             try:
-                return r.to_wire(), False
+                return r.to_wire(), r, False
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
                     r = echo(data,flags=[dns.flags.TC])
-                    return r.to_wire(), True
+                    return r.to_wire(), r, True
                 elif isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
-                    return r.to_wire(max_size=65535), True
+                    return r.to_wire(max_size=65535), r, True
             
         except:
             logging.error('get data from local zones is fail', exc_info=True)

@@ -32,16 +32,16 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
         if result:
             return data[:2]+result
 
-        result, iscache = auth.get(data, addr, transport) # <- Try to take data from Authoirty
+        result, response, iscache = auth.get(data, addr, transport) # <- Try to take data from Authoirty
         if result:
             if iscache is True:
-                threading.Thread(target=cache.put, args=(result,False)).start()
+                threading.Thread(target=cache.put, args=(result, response, False)).start()
             return result
 
         if rec is True:
-            result = recursive.recursive(data, transport)
+            result, response, iscache = recursive.recursive(data, transport)
             if result:
-                threading.Thread(target=cache.put, args=(result,)).start()
+                threading.Thread(target=cache.put, args=(result, response, iscache)).start()
                 return result
         else:
             return echo(data,dns.rcode.REFUSED).to_wire()
@@ -118,7 +118,7 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
         logging.critical('problem with asyncio loop in thread listener')
 
 
-def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
+def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:Recursive):
     engine = enginer(CONF)
     _auth.connect(engine)
     _cache.connect(engine)
@@ -127,8 +127,6 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority):
     if eval(CONF['GENERAL']['printstats']) is True:
         threading.Thread(target=counter, args=(statiscics,False)).start()
         stat = True
-
-    _recursive = Recursive(CONF)
 
     # -MainListener IP-
     try:
@@ -181,6 +179,7 @@ def start(CONF):
             
             _cache = Caching(CONF, manager.dict(), manager.list())
             _auth = Authority(CONF, manager.dict(), manager.list())
+            _recursive = Recursive(CONF)
             helper = Helper(CONF, _cache, _auth)
             helper.connect(enginer(CONF))
 
@@ -190,7 +189,7 @@ def start(CONF):
             for i in range(cpu_count()):
                 gather, stat = Pipe()
                 name = f'listener#{i}'
-                p = Process(target=launcher, args=(stat, CONF, _cache, _auth), name=name)
+                p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive), name=name)
                 p.start()
                 Stream.append(p)
                 Parents.append(gather)

@@ -55,39 +55,40 @@ class Recursive:
         try:
             self.conf = _CONF
             self.state = iscache
-            self.depth = int(_CONF['RECURSION']['maxdepth'])
+            self.depth = 8#int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])
             self.retry = int(_CONF['RECURSION']['retry'])
             self.resolver = _CONF['RECURSION']['resolver']
         except:
             logging.critical('initialization of recursive module is fail')
 
-    def recursive(self, data:bytes, transport:asyncio.Transport|asyncio.DatagramTransport):
+    def recursive(self, data:bytes|dns.message.Message, transport:asyncio.Transport|asyncio.DatagramTransport):
         # - External resolving if specify external DNS server
         try:
-            query = dns.message.from_wire(data,ignore_trailing=True, continue_on_error=True)
+            if isinstance(data,bytes):
+                query = dns.message.from_wire(data,ignore_trailing=True, continue_on_error=True)
+            elif isinstance(data,dns.message.Message):
+                query = data
+            else:
+                raise Exception('Bad incoming data type')
             if self.resolver:
                 result = Recursive.extresolve(self, self.resolver, query)
-                return result, None
+                return result.to_wire(), result, True
             # - Internal resolving if it is empty
             random.shuffle(_ROOT)
             global depth
             for i in range(3):
                 depth = 0
                 result,_ = Recursive.resolve(self, query, _ROOT[i], transport)
-                if type(result) is dns.message.QueryMessage: break
+                if isinstance(result, dns.message.Message): break
             if result:
-                if dns.flags.AA in result.flags:
-                    pass
-                elif not result.answer:
-                    result.set_rcode(3)
-                result.flags += dns.flags.RA
-                return  result.to_wire()
+                return result.to_wire(), result, True
             else:
                 raise Exception('empty recursion result') 
         except:
             logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'',exc_info=True)
-            return echo(data,dns.rcode.SERVFAIL,[dns.flags.RA]).to_wire()
+            result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
+            return result.to_wire(), result, False
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport):
         # -Checking current recursion depth-
@@ -141,9 +142,11 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if ipaddress.ip_address(ns).version == 4:
-                    result, ns = Recursive.resolve(self,query, ns, transport)
-                    if result and (result.rcode() in [
-                        dns.rcode.NOERROR, dns.rcode.REFUSED] or dns.flags.AA in result.flags): return result, ns
+                    result, _ = Recursive.resolve(self,query, ns, transport)
+                    if result:
+                        if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN] 
+                        or dns.flags.AA in result.flags):
+                            return result, ns
             return None, ns
 
         elif result.authority:
@@ -162,8 +165,10 @@ class Recursive:
                                     ns = str(rr[0])
                                     if ipaddress.ip_address(ns).version == 4:
                                         result, ns = Recursive.resolve(self, query, ns, transport)
-                                    if result and result.rcode() in [
-                                        dns.rcode.NOERROR, dns.rcode.REFUSED]: return result, ns
+                                    if result:
+                                        if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN]
+                                           or dns.flags.AA in result.flags): 
+                                            return result, ns
                                 return None, ns
         return None, ns
 
