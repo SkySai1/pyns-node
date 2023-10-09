@@ -13,6 +13,7 @@ import dns.name
 import dns.message
 import dns.tsig
 import dns.rrset
+import dns.flags
 import dns.xfr
 #from PyDNS import create_engine
 from backend.functions import getnow
@@ -55,23 +56,22 @@ class Transfer:
             Z = Zonemaker(self.conf)
             zone = Z.zonecontent(self.zone)
             r = dns.message.make_response(q)
-
+            r.flags = dns.flags.Flag(r.flags + dns.flags.AA)
             soa = zone.get_soa()
             rrsoa = dns.rrset.from_rdata(zone.origin,soa.minimum, soa)
-
             r.answer = [rrsoa]
-            Transfer.writer(self,r,transport)
-            
+            self.writer(r,transport)
+            r.question = []
             for data in zone.iterate_rdatasets():
                 if data[1].rdtype is not dns.rdatatype.SOA:
 
                     rrset = dns.rrset.from_rdata_list(data[0], data[1].ttl, data[1])
                     r.answer = [rrset]
 
-                    Transfer.writer(self,r,transport,r.tsig_ctx)
+                    self.writer(r,transport,r.tsig_ctx)
 
             r.answer = [rrsoa]
-            Transfer.writer(self,r,transport,r.tsig_ctx)
+            self.writer(r,transport,r.tsig_ctx)
             return r.to_wire()
         except:
             logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail", exc_info=True)
