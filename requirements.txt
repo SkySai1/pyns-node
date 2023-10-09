@@ -5,3 +5,4 @@ psycopg2==2.9.6
 SQLAlchemy==2.0.10
 dnspython==2.3.0
 Cython==3.0.2
+psutil==5.9.5

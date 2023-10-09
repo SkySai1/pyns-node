@@ -1,5 +1,8 @@
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
+from multiprocessing import current_process
+from psutil import Process
+import os
 import threading
 import time
 import dns.message
@@ -39,9 +42,22 @@ class Caching:
         self.db = AccessDB(engine, self.conf)
 
     def debuff(self):
+        a = current_process()
+        p = Process(a.pid)
+        p.cpu_percent()
+        wait = self.buffexp
         while True:
-            time.sleep(self.buffexp)
+            time.sleep(wait)
             self.buff.clear()
+            m = int(p.cpu_percent() // 10 + 1)
+            try:
+                wait = self.buffexp * m
+            except:
+                wait = self.buffexp
+            
+
+
+
 
     def move(self, i):
         if i > 0:

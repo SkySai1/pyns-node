@@ -123,7 +123,6 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
         listen = loop.create_server(lambda: TCPServer(_auth, _recursive, _cache, CONF, stat),ip,port,reuse_port=True)
         transport = loop.run_until_complete(listen)
     try:
-        threading.Thread(target=_cache.debuff, daemon=True).start()
         loop.run_forever()
         transport.close()
         loop.run_until_complete(transport.wait_closed())
@@ -152,6 +151,7 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
         if ipaddress.ip_address(ip).version == 4:
             threading.Thread(target=listener,name=current_process().name+'-UDP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
             threading.Thread(target=listener,name=current_process().name+'-TCP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
+            threading.Thread(target=_cache.debuff, daemon=True).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
         else:
             logging.error(f"{ip} is not available")
