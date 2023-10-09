@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
+import random
 from backend.accessdb import AccessDB, enginer
 from backend.functions import echo, toobig
 from backend.transfer import Transfer
-from backend.recursive import Recursive
+from backend.recursive import Recursive, Depth, _ROOT
 import time
 import dns.message
 import dns.rrset
@@ -99,14 +100,23 @@ class Authority:
     
     def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
         q = dns.message.make_query(cname,qtype,qcls)
-        _,r,_ = self.recursive.recursive(q,transport)
-        if r:
-            return r.answer
-        else:
-            return []
+        for i in range(3):
+            try:
+                depth = Depth()
+                ns = random.choice(_ROOT)
+                r, _ = self.recursive.resolve(q, ns, transport, depth)
+                if r:
+                    return r.answer
+            except:
+                i+=1
+        return []
 
-    def get(self, data:bytes, addr:tuple, transport:asyncio.Transport|asyncio.DatagramTransport):
+    def get(self, P):
         try:
+            if P.check.auth() is False: return None, None, False
+            data = P.data
+            addr = P.addr
+            transport = P.transport
             isrec = True
             key = dns.tsigkeyring.from_text({
                 "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs="

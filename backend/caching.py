@@ -47,23 +47,24 @@ class Caching:
         if i > 0:
             self.buff.insert(i-1, self.buff.pop(i))
 
-    def get(self, data:bytes):
+    def get(self, P):
         try:
-            result, key = iterater(data, self.buff)
+            if P.check.cache() is False: return None
+            result, key = iterater(P.data, self.buff)
             if result: return result
+            result = self.cache.get(key)
+            if result:
+                if sys.getsizeof(self.buff) > self.bufflimit:
+                    print(sys.getsizeof(self.buff), self.bufflimit) 
+                    a = self.buff.pop(list(self.buff.keys())[0])
+                self.buff[key] = result
+            return result
         except:
-            logging.warning('Geting cache data from fast local cache is fail')
-        result = self.cache.get(key)
-        if result:
-            if sys.getsizeof(self.buff) > self.bufflimit:
-                print(sys.getsizeof(self.buff), self.bufflimit) 
-                a = self.buff.pop(list(self.buff.keys())[0])
-            self.buff[key] = result
-        return result
+            logging.warning('Geting cache data from fast local cache is fail',exc_info=True)
+            return P.data[2:]
 
     def put(self, data:bytes, response:dns.message.Message, isupload:bool=True):
         key = parser(data)
-        #result = dns.message.from_wire(data,ignore_trailing=True,one_rr_per_rrset=True, continue_on_error=True)
         if not key in self.cache and self.refresh > 0:
             response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.cache[key] = data[2:]
@@ -99,10 +100,10 @@ class Caching:
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
+            #print([dns.name.from_wire(a,10) for a in self.cache.values()])
             if self.isdownload is True:
                 self.packing(db.GetFromCache())
-                if self.keys:
-                    for e in set(self.cache.keys()) ^ self.keys: self.cache.pop(e)
+                for e in set(self.cache.keys()) ^ self.keys: self.cache.pop(e)
         except:
             logging.error('Making bytes objects for local cache is fail')
       

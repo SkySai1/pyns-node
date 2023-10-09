@@ -179,6 +179,7 @@ class AccessDB:
         try:
             for record in data:
                 name = record.get('name')
+                record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
                 stmt = (select(Cache)
                     .filter(Cache.name == name)
                     .filter(Cache.cls == record.get('cls'))
@@ -186,12 +187,14 @@ class AccessDB:
                 )
                 result = self.c.execute(stmt).first()
                 if not result:
-                    record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
                     self.c.execute(insert(Cache),record)
+                else:
+                    self.c.execute(update(Cache), record)
+
             self.c.commit()
             return True
         except Exception as e:
-            logging.error('Upload cache data to database is fail')
+            logging.error('Upload cache data to database is fail', exc_info=True)
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return False

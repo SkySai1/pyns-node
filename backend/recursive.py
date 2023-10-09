@@ -49,28 +49,35 @@ QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
 
 CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
+class Depth:
+
+    count = 0
+
+    def __init__(self) -> None:
+        self.count = 0
+
 class Recursive:
 
     def __init__(self, _CONF, iscache = True):
         try:
             self.conf = _CONF
             self.state = iscache
-            self.depth = 8#int(_CONF['RECURSION']['maxdepth'])
+            self.maxdepth = int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])
             self.retry = int(_CONF['RECURSION']['retry'])
             self.resolver = _CONF['RECURSION']['resolver']
         except:
             logging.critical('initialization of recursive module is fail')
 
-    def recursive(self, data:bytes|dns.message.Message, transport:asyncio.Transport|asyncio.DatagramTransport):
+    def recursive(self, P):
         # - External resolving if specify external DNS server
         try:
-            if isinstance(data,bytes):
-                query = dns.message.from_wire(data,ignore_trailing=True, continue_on_error=True)
-            elif isinstance(data,dns.message.Message):
-                query = data
-            else:
-                raise Exception('Bad incoming data type')
+            if P.check.recursive() is False:
+                result = P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
+                return result, None, False
+            data = P.data
+            transport = P.transport
+            query = dns.message.from_wire(data)
             if self.resolver:
                 result = self.extresolve(query)
                 return result.to_wire(), result, True
@@ -78,7 +85,7 @@ class Recursive:
             random.shuffle(_ROOT)
             global depth
             for i in range(3):
-                depth = 0
+                self.depth = Depth()
                 result,_ = Recursive.resolve(self, query, _ROOT[i], transport)
                 if isinstance(result, dns.message.Message): break
             if result:
@@ -86,21 +93,21 @@ class Recursive:
             else:
                 raise Exception('empty recursion result') 
         except:
-            logging.error(f'recursive search fail at \'{query.question[0].to_text()}\'',exc_info=True)
+            logging.error(f'recursive search fail at \'{dns.name.from_wire(P.data,12)}\'',exc_info=True)
             result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
             return result.to_wire(), result, False
 
-    def resolve(self, query:dns.message.QueryMessage, ns, transport):
+    def resolve(self, query:dns.message.QueryMessage, ns, transport, depth = None):
         # -Checking current recursion depth-
         try:
-            global depth
-            depth += 1
-            if depth >= self.depth:
-                raise Exception("Reach maxdetph - %s!" % self.depth)# <- Set max recursion depth
+            if depth: self.depth = depth
+            self.depth.count += 1
+            if self.depth.count >= self.maxdepth:
+                raise Exception("Reach maxdetph - %s!" % self.maxdepth)# <- Set max recursion depth
             
             if _DEBUG in [1,3]: print(f"{depth}: {ns}") # <- SOME DEBUG
         except:
-            logging.warning(f'query \'{query.question[0].to_text()}\' was reached max recursion depth ({self.depth})')
+            logging.warning(f'query \'{query.question[0].to_text()}\' was reached max recursion depth ({self.maxdepth})')
             return echo(query,dns.rcode.REFUSED, [dns.flags.RA]), ns
         
         # -Trying to get answer from specifing nameserver-

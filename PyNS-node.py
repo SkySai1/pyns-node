@@ -18,6 +18,7 @@ from backend.accessdb import enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
+from backend.packet import Packet
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
@@ -26,28 +27,43 @@ from backend.logger import logsetup
 
 _COUNT = 0
 
+def warden(data, addr, transport) -> Packet:
+    P = Packet(data,addr, transport)
+    P.allow.query()
+    P.allow.cache()
+    P.allow.auth()
+    P.allow.recursive()
+    return P
+
+
+
 def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple, transport):
-    try:  
-        result = cache.get(data) # <- Try to take data from Cache
+    try:
+        #print(dns.name.from_wire(data,12))
+        P = warden(data, addr, transport)
+        if P.check.query() is False:
+            return P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
+        
+        result = cache.get(P) # <- Try to take data from Cache
         if result:
             return data[:2]+result
 
-        result, response, iscache = auth.get(data, addr, transport) # <- Try to take data from Authoirty
+        result, response, iscache = auth.get(P) # <- Try to take data from Authoirty
         if result:
             if iscache is True:
                 threading.Thread(target=cache.put, args=(result, response, False)).start()
             return result
 
         if rec is True:
-            result, response, iscache = recursive.recursive(data, transport)
-            if result:
+            result, response, iscache = recursive.recursive(P)
+            if iscache is True:
                 threading.Thread(target=cache.put, args=(result, response, iscache)).start()
-                return result
+            return result
         else:
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'fail with handle querie {result.question[0].to_text()}', exc_info=True)
+        logging.error(f'fail with handle querie {dns.name.from_wire(data,12)}')
         return result.to_wire()
 
 
