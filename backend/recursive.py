@@ -72,7 +72,7 @@ class Recursive:
             else:
                 raise Exception('Bad incoming data type')
             if self.resolver:
-                result = Recursive.extresolve(self, self.resolver, query)
+                result = self.extresolve(query)
                 return result.to_wire(), result, True
             # - Internal resolving if it is empty
             random.shuffle(_ROOT)
@@ -130,7 +130,7 @@ class Recursive:
                     result.question[0].rdtype,
                     result.question[0].rdclass
                 )
-                cname_res, _ = Recursive.resolve(self, qcname, random.choice(_ROOT), transport)
+                cname_res, _ = self.resolve(qcname, random.choice(_ROOT), transport)
                 if cname_res.answer:
                     [result.answer.append(rrset) for rrset in cname_res.answer]
 
@@ -142,7 +142,7 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if ipaddress.ip_address(ns).version == 4:
-                    result, _ = Recursive.resolve(self,query, ns, transport)
+                    result, _ = self.resolve(query, ns, transport)
                     if result:
                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN] 
                         or dns.flags.AA in result.flags):
@@ -155,7 +155,7 @@ class Recursive:
                     qname = dns.name.from_text(str(rr))
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
-                        nsdata, _ = Recursive.resolve(self, nsquery, ns, transport)
+                        nsdata, _ = self.resolve(nsquery, ns, transport)
                         if nsdata:
                             if not nsdata.rcode() in [
                             dns.rcode.NOERROR, dns.rcode.REFUSED]:
@@ -164,7 +164,7 @@ class Recursive:
                                 for rr in nsdata.answer:
                                     ns = str(rr[0])
                                     if ipaddress.ip_address(ns).version == 4:
-                                        result, ns = Recursive.resolve(self, query, ns, transport)
+                                        result, ns = self.resolve(query, ns, transport)
                                     if result:
                                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN]
                                            or dns.flags.AA in result.flags): 
@@ -172,15 +172,15 @@ class Recursive:
                                 return None, ns
         return None, ns
 
-    def extresolve(self, resolver, query:dns.message.Message):
+    def extresolve(self, query:dns.message.Message):
         try:
             udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
             udp.settimeout(2) # < - Setting timeout
-            dns.query.send_udp(udp, query, (resolver, 53))
-            answer,_ = dns.query.receive_udp(udp,(resolver, 53))
+            dns.query.send_udp(udp, query, (self.resolver, 53))
+            answer,_ = dns.query.receive_udp(udp,(self.resolver, 53))
         except:
             answer = echo(query, dns.rcode.SERVFAIL, [dns.flags.RA])
-            logging.error(f'resolve \'{query.question[0].to_text()}\' querie was failed on \'{resolver}\' nameserver')
+            logging.error(f'resolve \'{query.question[0].to_text()}\' querie was failed on \'{self.resolver}\' nameserver')
         finally:
             return answer
 

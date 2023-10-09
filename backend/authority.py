@@ -20,18 +20,6 @@ import dns.renderer
 import dns.tsig
 
 
-def findrdataset(auth:DictProxy, zones:ListProxy, qname:dns.name.Name, rdtype:dns.rdatatype):
-    rrset = None
-    for e in zones:
-        if qname.is_subdomain(dns.name.from_text(e)):
-            zone = e
-            break
-    if zone:
-        zdata = auth.get(zone)
-        if zdata:
-            rrset = zdata.get_rdataset(qname,rdtype)
-    return qname, rrset  
-
 class Authority:
 
     def __init__(self, conf, _rec:Recursive, auth:DictProxy, zones:ListProxy):
@@ -57,7 +45,7 @@ class Authority:
             zones.reverse()
             for e in zones:
                 if qname.is_subdomain(dns.name.from_text(e)):
-                    auth, state = Authority.findauth(self,qname.to_text(),e)
+                    auth, state = self.findauth(qname.to_text(),e)
                     rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
@@ -134,7 +122,7 @@ class Authority:
                 except:
                     logging.error('Sending transfer was failed')
                     return echo(data,dns.rcode.SERVFAIL)
-            node, zone, auth, state = Authority.findnode(self, qname, qclass)
+            node, zone, auth, state = self.findnode(qname, qclass)
             if not zone: return None, None, False
             r = dns.message.make_response(q)
             if state is not None:
@@ -142,30 +130,32 @@ class Authority:
                     r.flags += dns.flags.AA
                     if node:
                         #for e in node: print(e.name, e.type, e.data)
-                        r.answer = Authority.filling(self,node,[qtype, 'CNAME'])
-                        if r.answer:
+                        r.answer = self.filling(node,[qtype, 'CNAME'])
+                        if r.answer and qtype != 'CNAME':
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                                 cname = dns.name.from_text(r.answer[-1][0].to_text())
                                 crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                                cnode, zone, auth, state = Authority.findnode(self, cname, crdclass)
+                                cnode, zone, auth, state = self.findnode(cname, crdclass)
                                 if cnode:
                                     if state:
-                                        r.answer += Authority.filling(self, cnode, [qtype, 'CNAME'])
+                                        r.answer += self.filling(cnode, [qtype, 'CNAME'])
+                                    else:
+                                        break
                                 elif isrec:
-                                    r.answer += Authority.findcname(self, cname, qtype, qclass, transport)  
+                                    r.answer += self.findcname(cname, qtype, qclass, transport)  
                                     break 
                                 else:
                                     break
                     if not r.answer and not r.authority:
                         r.set_rcode(dns.rcode.NXDOMAIN)
-                        r = Authority.fakezone(self,q,zone)
+                        r = self.fakezone(q,zone)
                 if state is False and auth:
                     targets = []
-                    r.authority = Authority.filling(self,auth)                  
+                    r.authority = self.filling(auth)                  
                     targets = [ns for a in auth for ns in a.data]
                     if targets:
-                        add = Authority.findadd(self,targets)
-                        r.additional = Authority.filling(self,add)
+                        add = self.findadd(targets)
+                        r.additional = self.filling(add)
             try:
                 return r.to_wire(), r, True
             except dns.exception.TooBig:
@@ -179,7 +169,7 @@ class Authority:
             logging.error('get data from local zones is fail', exc_info=True)
             return echo(q,dns.rcode.SERVFAIL).to_wire(), False
 
-    def download(self, db:AccessDB):
+    '''def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
             [self.zones.pop(0) for i in range(self.zones.__len__())]
@@ -187,4 +177,4 @@ class Authority:
             self.zones.sort()
             self.zones.reverse()
         except:
-            logging.error('making local zones data is fail', exc_info=True)
+            logging.error('making local zones data is fail', exc_info=True)'''

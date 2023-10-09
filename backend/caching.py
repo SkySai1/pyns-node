@@ -15,40 +15,12 @@ from backend.functions import getnow
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
-def packing(cache:DictProxy, rawdata, isrec:bool=True):
-    try:
-        puredata = []
-        keys = set()
-        if rawdata:
-            for obj in rawdata:
-                row = obj[0]
-                name = row.name.encode('idna').decode('utf-8')
-                dtype = dns.rdatatype.from_text(row.type)
-                cls = dns.rdataclass.from_text(row.cls)
-                q = dns.message.make_query(name, dtype, cls)
-                key = parser(q.to_wire())
-                keys.add(key)
-                if not key in cache:
-                    r = dns.message.make_response(q)
-                    if isrec is True: r.flags += dns.flags.RA
-                    for d in row.data:
-                        d = d.split(' ')
-                        name,ttl,cls,t= d[:4]
-                        data = ' '.join(d[4:])
-                        r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
-                    packet = dns.message.Message.to_wire(r)
-                    cache[key]=packet[2:]
-            return keys, cache
-    except:
-        logging.error('Packing cache data is fail', exc_info=True)  
-    finally:    
-        return None, None
-
 # --- Cahe job ---
 class Caching:
     def __init__(self, CONF, CACHE:DictProxy, TEMP:ListProxy):
         try:
             self.conf = CONF
+            self.keys = set()
             self.refresh = int(CONF['DATABASE']['timesync'])
             self.cache = CACHE
             self.temp = TEMP
@@ -57,7 +29,8 @@ class Caching:
             self.buffexp = float(CONF['CACHING']['expire'])
             self.bufflimit = int(CONF['CACHING']['size'])
             self.timedelta = int(CONF['GENERAL']['timedelta'])
-            self.iscache = eval(self.conf['CACHING']['download'])
+            self.isdownload = eval(self.conf['CACHING']['download'])
+            self.isupload = eval(self.conf['CACHING']['upload'])
             self.isrec = eval(CONF['RECURSION']['enable']) 
         except:
             logging.critical('Initialization of caching module is fail')
@@ -96,14 +69,40 @@ class Caching:
             self.cache[key] = data[2:]
             if isupload is True:
                 self.temp.append(response)
-            
+
+    def packing(self, rawdata):
+        try:
+            self.keys = set()
+            if rawdata:
+                for obj in rawdata:
+                    row = obj[0]
+                    name = row.name.encode('idna').decode('utf-8')
+                    dtype = dns.rdatatype.from_text(row.type)
+                    cls = dns.rdataclass.from_text(row.cls)
+                    q = dns.message.make_query(name, dtype, cls)
+                    key = parser(q.to_wire())
+                    self.keys.add(key)
+                    if not key in self.cache:
+                        r = dns.message.make_response(q)
+                        if self.isrec is True: r.flags += dns.flags.RA
+                        for d in row.data:
+                            d = d.split(' ')
+                            name,ttl,cls,t= d[:4]
+                            data = ' '.join(d[4:])
+                            r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
+                        packet = dns.message.Message.to_wire(r)
+                        self.cache[key]=packet[2:]
+        except:
+            logging.error('Packing cache data is fail')
+
+
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
-            if self.iscache is True:
-                keys,_ = packing(self.cache, db.GetFromCache(), self.isrec)
-                if keys:
-                    for e in set(self.cache.keys()) ^ keys: self.cache.pop(e)
+            if self.isdownload is True:
+                self.packing(db.GetFromCache())
+                if self.keys:
+                    for e in set(self.cache.keys()) ^ self.keys: self.cache.pop(e)
         except:
             logging.error('Making bytes objects for local cache is fail')
       

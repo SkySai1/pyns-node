@@ -171,7 +171,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Retrieve domains data from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
 
 
     # -- Cache functions
@@ -193,7 +193,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Upload cache data to database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
             return False
 
             
@@ -224,7 +224,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Download cache data from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
 
     def CacheExpired(self, expired):
         try:
@@ -238,7 +238,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Clean cache data in database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
 
     # -- Zones
     def ZoneCreate(self, data):
@@ -253,7 +253,7 @@ class AccessDB:
         except Exception as e:
             logging.error(f"Add zone {data['name']} into database is fail")
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
             return False
 
     def ZoneExpired(self, now):
@@ -279,7 +279,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Retrieve zones from database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
             return None
 
     # -- Domains
@@ -290,7 +290,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Creating new domains into database is fail', exc_info=True)
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
 
     # -- Rules
     def NewRules(self, data:list):
@@ -322,7 +322,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Creating new rules into database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
     
     def NewZoneRules(self, zoneid, data:list):
         try:
@@ -353,7 +353,7 @@ class AccessDB:
         except Exception as e:
             logging.error('Assignment rules to zones in database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
-                AccessDB.drop(self)
+                self.drop()
             return False
             
 
