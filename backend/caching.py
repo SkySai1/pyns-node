@@ -116,12 +116,21 @@ class Caching:
     def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:
-            #print([dns.name.from_wire(a,10) for a in self.cache.values()])
+            # -- DEBUG LOGGING BLOCK START --
+            if self.cache and logging.DEBUG >= logging.root.level:
+                emptyid = int.to_bytes(0,2,'big')
+                queries = []
+                for data in self.cache.values():
+                    q = dns.message.from_wire(emptyid+data)
+                    queries.append(f"'{q.question[0].to_text()}'")                   
+                logging.debug(f"Data in local cache: {'; '.join(queries)}")
+            # -- DEBUG LOGGING BLOCK END --
+
             if self.isdownload is True:
                 self.packing(db.GetFromCache())
                 for e in set(self.cache.keys()) ^ self.keys: self.cache.pop(e)
         except:
-            logging.error('Making bytes objects for local cache is fail')
+            logging.error('Making bytes objects for local cache is fail', exc_info=True)
       
 
     def upload(self, db:AccessDB, data=None):
