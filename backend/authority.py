@@ -6,6 +6,7 @@ from backend.accessdb import AccessDB, enginer
 from backend.functions import echo, toobig
 from backend.transfer import Transfer
 from backend.recursive import Recursive, Depth, _ROOT
+from backend.packet import Packet
 import time
 import dns.message
 import dns.rrset
@@ -111,9 +112,8 @@ class Authority:
                 i+=1
         return []
 
-    def get(self, P):
+    def get(self, P:Packet):
         try:
-            if P.check.auth() is False: return None, None, False
             data = P.data
             addr = P.addr
             transport = P.transport

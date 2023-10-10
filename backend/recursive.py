@@ -72,9 +72,6 @@ class Recursive:
     def recursive(self, P):
         # - External resolving if specify external DNS server
         try:
-            if P.check.recursive() is False:
-                result = P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
-                return result, None, False
             data = P.data
             transport = P.transport
             query = dns.message.from_wire(data)

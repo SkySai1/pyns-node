@@ -31,31 +31,64 @@ def warden(data, addr, transport) -> Packet:
     P = Packet(data,addr, transport)
     P.allow.query()
     P.allow.cache()
-    P.allow.auth()
+    P.allow.authority()
     P.allow.recursive()
+
+    # -- INFO LOGGING BLOCK START --
+    if logging.INFO >= logging.root.level:
+        try:
+            q = dns.message.from_wire(data,continue_on_error=True)
+            question = q.question[0].to_text()
+            logging.info(f"Get Query({q.id}) from {addr} is '{question}'")
+        except:
+            logging.info(f"Query from {addr} is malformed!")
+    # -- INFO LOGGING BLOCK END --
     return P
 
 
 
 def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple, transport):
     try:
-        #print(dns.name.from_wire(data,12))
         P = warden(data, addr, transport)
+
+        # -- DEBUG LOGGING BLOCK START --
+        if logging.DEBUG >= logging.root.level:
+            debug = True
+            try:
+                qid = int.from_bytes(data[:2],'big')
+                q = dns.message.from_wire(data,continue_on_error=True)
+                question = q.question[0].to_text()
+                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Set permissions - Allow: '{P.getperms(as_text=True)}.'")
+            except:
+                qid = '00000'
+                logging.debug(f"Query from {addr} is malformed!. Set permissions - Allow: '{P.getperms(as_text=True)}.'")        
+        else: debug = None
+
+        # -- DEBUG LOGGING BLOCK END --
+
+
         if P.check.query() is False:
+            if debug: logging.debug(f"Query({qid}) from {addr} is not Allowed. REFUSED.")
             return P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
-        
-        result = cache.get(P) # <- Try to take data from Cache
-        if result:
-            return data[:2]+result
+     
 
-        result, response, iscache = auth.get(P) # <- Try to take data from Authoirty
-        if result:
-            if iscache is True:
-                threading.Thread(target=cache.put, args=(result, response, False)).start()
-            return result
+        if P.check.cache():
+            result, state = cache.get(P) # <- Try to take data from Cache
+            if result:
+                if debug: logging.debug(f"Query({qid}) from {addr} was returned from cache. Core cash is {state}.")
+                return data[:2]+result
 
-        if rec is True:
+        if P.check.authority():
+            result, response, iscache = auth.get(P) # <- Try to take data from Authoirty
+            if result:
+                if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
+                if iscache is True:
+                    threading.Thread(target=cache.put, args=(result, response, False)).start()
+                return result
+
+        if rec is True and P.check.recursive():
             result, response, iscache = recursive.recursive(P)
+            if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             if iscache is True:
                 threading.Thread(target=cache.put, args=(result, response, iscache)).start()
             return result
@@ -63,7 +96,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'fail with handle querie {dns.name.from_wire(data,12)}')
+        logging.error(f'Fail handle query {result.question[0].to_text()}')
         return result.to_wire()
 
 
@@ -87,6 +120,14 @@ class UDPserver(asyncio.DatagramProtocol):
             global _COUNT
             _COUNT += 1
         result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr, self.transport)
+        
+        # -- INFO LOGGING BLOCK START --
+        if logging.INFO >= logging.root.level:
+            qid = int.from_bytes(data[:2],'big')
+            rcode = dns.rcode.to_text(int.from_bytes(result[3:4],'big'))
+            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
+        # -- INFO LOGGING BLOCK END --
+
         self.transport.sendto(result, addr)
 
 # -- TCP socket --
@@ -100,6 +141,7 @@ class TCPServer(asyncio.Protocol):
         self.rec = eval(CONF['RECURSION']['enable']) 
         super().__init__()    
     
+
     def connection_made(self, transport:asyncio.Transport):
         self.transport = transport
 
@@ -110,6 +152,14 @@ class TCPServer(asyncio.Protocol):
         addr = self.transport.get_extra_info('peername')
         result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr, self.transport)
         l = result.__len__().to_bytes(2,'big')
+
+        # -- INFO LOGGING BLOCK START --
+        if logging.INFO >= logging.root.level:
+            qid = int.from_bytes(data[:2],'big')
+            rcode = dns.rcode.to_text(int.from_bytes(result[3:4],'big'))
+            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
+        # -- INFO LOGGING BLOCK END --
+
         self.transport.write(l+result)
 
 
@@ -123,6 +173,7 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
         listen = loop.create_server(lambda: TCPServer(_auth, _recursive, _cache, CONF, stat),ip,port,reuse_port=True)
         transport = loop.run_until_complete(listen)
     try:
+        logging.info(f'Started listen at {ip, port}')
         loop.run_forever()
         transport.close()
         loop.run_until_complete(transport.wait_closed())
@@ -130,13 +181,20 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
     except KeyboardInterrupt:
         pass
     except:
-        logging.critical('problem with asyncio loop in thread listener')
+        logging.critical(f'Start new listener is fail {current_process().name}.')
+        sys.exit(1)
 
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:Recursive):
     engine = enginer(CONF)
+    logging.debug(f'Database engine ({engine.url}) is created.')
+
     _auth.connect(engine)
+    logging.debug(f'AUTHORITY module connect to database is successful.')
+
     _cache.connect(engine)
+    logging.debug(f'CACHE module connect to database is successful.')
+
     # -Counter-
     stat = False
     if eval(CONF['GENERAL']['printstats']) is True:
@@ -149,8 +207,8 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
         port = int(CONF['GENERAL']['listen-port'])
         l = []
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,name=current_process().name+'-UDP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
-            threading.Thread(target=listener,name=current_process().name+'-TCP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
+            threading.Thread(target=listener,name='UDP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
+            threading.Thread(target=listener,name='TCP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
             threading.Thread(target=_cache.debuff, daemon=True).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
         else:
@@ -188,27 +246,42 @@ def counter(pipe, output:bool = False):
         
 # --- Main Function ---
 def start(CONF):
-    logsetup(CONF)
+    logsetup(CONF, __name__)
+    logging.debug('PyNS IS STARTED!')
     try: 
         with Manager() as manager:
             # -Init Classes
             
             _cache = Caching(CONF, manager.dict(), manager.list())
+            logging.debug('CACHE module was init successful')
+
             _recursive = Recursive(CONF)
+            logging.debug('RECURSIVE module was init successful')
+
             _auth = Authority(CONF, _recursive, manager.dict(), manager.list())
+            logging.debug('AUTHORITY module was init successful')
+            
+            
             helper = Helper(CONF, _cache, _auth)
+            logging.debug('HELPER module was init successful')  
+
             helper.connect(enginer(CONF))
+            logging.debug('HELPER module connect to database was successful')  
 
             # -Start server for each core-
             Parents = []
             Stream = []
             for i in range(cpu_count()):
-                gather, stat = Pipe()
-                name = f'listener#{i}'
-                p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive), name=name)
-                p.start()
-                Stream.append(p)
-                Parents.append(gather)
+                try:
+                    gather, stat = Pipe()
+                    name = f'listener#{i}'
+                    p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive), name=name)
+                    p.start()
+                    logging.debug(f'New Listener ({name}) was started successful')
+                    Stream.append(p)
+                    Parents.append(gather)
+                except:
+                    logging.critical(f'Fail with up {name}')
             # -Start background worker
             p = Process(target=helper.watcher, name='watcher')
             p.start()
@@ -216,7 +289,7 @@ def start(CONF):
             # -Counter-
             if eval(CONF['GENERAL']['printstats']) is True:
                 threading.Thread(target=counter, args=(Parents,True), daemon=True).start()
-            
+                logging.debug(f'Gather statistics is enable')
             for p in Stream:
                 p.join()
 
@@ -224,7 +297,7 @@ def start(CONF):
         for p in Stream:
             p.terminate()
     except:
-        logging.critical('some problem with starting')
+        logging.critical('Some problems with starting')
         sys.exit(1)
 
 if __name__ == "__main__":

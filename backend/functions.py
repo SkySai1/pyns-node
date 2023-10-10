@@ -12,7 +12,8 @@ def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:l
             m = dns.message.from_wire(m,ignore_trailing=True,continue_on_error=True)
         result = dns.message.make_response(m)
         result.set_rcode(state)
-        result.flags = dns.flags.Flag(sum(flags))
+        if flags:
+            result.flags = dns.flags.Flag(sum(flags))
         return result
     except:
         logging.error('making echo dns answer is fail',exc_info=True)

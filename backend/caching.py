@@ -15,6 +15,7 @@ import dns.flags
 import sys
 from backend.accessdb import AccessDB
 from backend.functions import getnow
+from backend.packet import Packet
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
@@ -34,7 +35,7 @@ class Caching:
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.isdownload = eval(self.conf['CACHING']['download'])
             self.isupload = eval(self.conf['CACHING']['upload'])
-            self.isrec = eval(CONF['RECURSION']['enable']) 
+            self.isrec = eval(CONF['RECURSION']['enable'])
         except:
             logging.critical('Initialization of caching module is fail')
 
@@ -63,18 +64,17 @@ class Caching:
         if i > 0:
             self.buff.insert(i-1, self.buff.pop(i))
 
-    def get(self, P):
+    def get(self, P:Packet):
         try:
-            if P.check.cache() is False: return None
             result, key = iterater(P.data, self.buff)
-            if result: return result
+            if result: return result, True
             result = self.cache.get(key)
             if result:
                 if sys.getsizeof(self.buff) > self.bufflimit:
                     print(sys.getsizeof(self.buff), self.bufflimit) 
                     a = self.buff.pop(list(self.buff.keys())[0])
                 self.buff[key] = result
-            return result
+            return result, False
         except:
             logging.warning('Geting cache data from fast local cache is fail',exc_info=True)
             return P.data[2:]
@@ -83,7 +83,7 @@ class Caching:
         key = parser(data)
         if not key in self.cache and self.refresh > 0:
             response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
-            self.cache[key] = data[2:]
+            self.buff[key] = self.cache[key] = data[2:]
             if isupload is True:
                 self.temp.append(response)
 
