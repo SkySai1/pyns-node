@@ -19,30 +19,37 @@ class Helper:
 
     def watcher(self):
         try:
-            threading.Thread(target=Helper.cacheupdate, args=(self,)).start()
-            #threading.Thread(target=Helper.domainupdate, args=(self,)).start()
+            while True:
+                Stream = []
+                Stream.append(threading.Thread(target=Helper.cacheupdate, args=(self,)))
+                Stream.append(threading.Thread(target=Helper.nodecheck, args=(self,)))
+                for t in Stream:
+                    t.start()
+                #for t in Stream:
+                    t.join()
+                #threading.Thread(target=Helper.domainupdate, args=(self,)).start()
+                time.sleep(self.sync)
             pass
         except KeyboardInterrupt: 
             pass
 
+    def nodecheck(self):
+        try:
+            self.db.NodeUpdate()
+        except:
+            logging.error('Update node info is fail.')
     def cacheupdate(self):
-        while True:
-            try:
-                self.cache.upload(self.db)
-                self.cache.download(self.db)
-            except:
-                logging.error('update cache data is fail')
-            finally:
-                time.sleep(self.sync)
+        try:
+            self.cache.upload(self.db)
+            self.cache.download(self.db)
+        except:
+            logging.error('Update cache data is fail.')
 
     def domainupdate(self):
-        while True:
-            try:    
-                self.auth.download(self.db)
-            except:
-                logging.exception('update zones data is fail')
-            finally:
-                time.sleep(self.sync)
+        try:    
+            self.auth.download(self.db)
+        except:
+            logging.exception('Update zones data is fail.')
 
     def unslave(self, db:AccessDB):
         try:

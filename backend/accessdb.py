@@ -37,6 +37,12 @@ def enginer(_CONF):
         logging.critical(f"The database is unreachable")
         sys.exit(1)
 
+class Nodes(Base):
+    __tablename__ = "nodes"
+    id = Column(Integer, primary_key=True)
+    node = Column(String(255), nullable=False, unique=True)
+    #addr = Column(String(24), nullable=False, unique=True)
+    active = Column(DateTime(timezone=True), nullable=False) 
 
 
 class Domains(Base):  
@@ -117,6 +123,7 @@ class AccessDB:
         self.conf = _CONF
         self.sync = float(_CONF['DATABASE']['timesync'])
         self.timedelta = int(_CONF['GENERAL']['timedelta'])
+        self.node = _CONF['DATABASE']['node']
         self.c = Session(engine)
 
     def drop(self):
@@ -137,6 +144,27 @@ class AccessDB:
             .filter(state)
         )
         return self.c.execute(stmt).fetchall()
+    
+    # -- Nodes work --
+    def NodeUpdate(self):
+        try:
+            check = self.c.execute(select(Nodes).filter(Nodes.node == self.node)).first()
+            if check:
+                stmt = (update(Nodes).values(
+                    active = getnow(self.timedelta, 0)
+                    ))
+            else:
+                stmt = (insert(Nodes).values(
+                    node = self.node,
+                    active = getnow(self.timedelta, 0)
+                    ))
+            self.c.execute(stmt)
+            self.c.commit()
+        except Exception as e:
+            logging.error('Node update status is fail')
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()
+
 
     # -- Get data from Domains table
     def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype:str|list = None, zone=None, decomposition:bool=False):
