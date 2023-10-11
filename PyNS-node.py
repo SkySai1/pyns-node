@@ -14,7 +14,7 @@ import dns.message
 import dns.name
 import dns.rdataclass
 import dns.rdatatype
-from backend.accessdb import enginer
+from backend.accessdb import AccessDB, enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
@@ -96,7 +96,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'Fail handle query {result.question[0].to_text()}')
+        logging.error(f'Fail handle query {result.question[0].to_text()}', exc_info=True)
         return result.to_wire()
 
 
@@ -187,12 +187,12 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
 
 def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:Recursive):
     engine = enginer(CONF)
-    logging.debug(f'Database engine ({engine.url}) is created.')
+    db = AccessDB(engine, CONF)
 
-    _auth.connect(engine)
+    _auth.connect(db)
     logging.debug(f'AUTHORITY module connect to database is successful.')
 
-    _cache.connect(engine)
+    _cache.connect(db)
     logging.debug(f'CACHE module connect to database is successful.')
 
     # -Counter-

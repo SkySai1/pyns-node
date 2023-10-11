@@ -21,6 +21,8 @@ except: from backend.parser import parser, iterater
 
 # --- Cahe job ---
 class Caching:
+    db = None
+
     def __init__(self, CONF, CACHE:DictProxy, TEMP:ListProxy):
         try:
             self.conf = CONF
@@ -36,11 +38,12 @@ class Caching:
             self.isdownload = eval(self.conf['CACHING']['download'])
             self.isupload = eval(self.conf['CACHING']['upload'])
             self.isrec = eval(CONF['RECURSION']['enable'])
+            self.scale = float(CONF['CACHING']['scale'])
         except:
             logging.critical('Initialization of caching module is fail')
 
-    def connect(self, engine):
-        self.db = AccessDB(engine, self.conf)
+    def connect(self, db:AccessDB):
+        self.db = db
 
     def debuff(self):
         a = current_process()
@@ -50,19 +53,25 @@ class Caching:
         while True:
             time.sleep(wait)
             self.buff.clear()
-            m = int(p.cpu_percent() // 10 + 1)
-            try:
+            m = self.scale*round(p.cpu_percent() / 100, 2)
+            if m < 1: m = 1
+            try: 
                 wait = self.buffexp * m
-            except:
-                wait = self.buffexp
-            
+            except: wait = self.buffexp
 
-
-
-
-    def move(self, i):
-        if i > 0:
-            self.buff.insert(i-1, self.buff.pop(i))
+    def find(self, P:Packet):
+        q = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+        qname = q.question[0].name.to_text()
+        qtype = dns.rdatatype.to_text(q.question[0].rdtype)
+        qclass = dns.rdataclass.to_text(q.question[0].rdclass)
+        rawcache = self.db.GetFromCache(qname,qclass,qtype)
+        if rawcache:
+            r = dns.message.make_response(q, (P.check.recursive() and self.isrec))
+            data = rawcache[0][0].split(' ')
+            r.answer.append(
+                dns.rrset.from_text_list(qname,)
+            )
+        return None        
 
     def get(self, P:Packet):
         try:
@@ -74,48 +83,59 @@ class Caching:
                     print(sys.getsizeof(self.buff), self.bufflimit) 
                     a = self.buff.pop(list(self.buff.keys())[0])
                 self.buff[key] = result
+            else:
+                result = self.download(P)
             return result, False
         except:
-            logging.warning('Geting cache data from fast local cache is fail',exc_info=True)
-            return P.data[2:]
+            logging.warning('Get local cache is fail',exc_info=True)
+            return P.data[2:], False
 
     def put(self, data:bytes, response:dns.message.Message, isupload:bool=True):
         key = parser(data)
         if not key in self.cache and self.refresh > 0:
             response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.buff[key] = self.cache[key] = data[2:]
-            if isupload is True:
+            if isupload and response.answer:
                 self.temp.append(response)
 
-    def packing(self, rawdata):
+    def packing(self, rawdata, P:Packet, q:dns.message.Message):
         try:
             self.keys = set()
             if rawdata:
                 for obj in rawdata:
                     row = obj[0]
                     name = row.name.encode('idna').decode('utf-8')
-                    dtype = dns.rdatatype.from_text(row.type)
-                    cls = dns.rdataclass.from_text(row.cls)
-                    q = dns.message.make_query(name, dtype, cls)
                     key = parser(q.to_wire())
-                    self.keys.add(key)
                     if not key in self.cache:
-                        r = dns.message.make_response(q)
-                        if self.isrec is True: r.flags += dns.flags.RA
+                        r = dns.message.make_response(q, (P.check.recursive() and self.isrec))
                         for d in row.data:
                             d = d.split(' ')
                             name,ttl,cls,t= d[:4]
                             data = ' '.join(d[4:])
                             r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
-                        packet = dns.message.Message.to_wire(r)
-                        self.cache[key]=packet[2:]
+                        result = dns.message.Message.to_wire(r)[2:]
+                        self.cache[key] = result
+                logging.debug(f"{name} was found in basecache")
+                return result
         except:
-            logging.error('Packing cache data is fail')
+            logging.error('Packing cache data is fail',exc_info=True)
 
 
-    def download(self, db:AccessDB):
-        # --Getting all records from cache tatble
+    def download(self, P:Packet):
+        q = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+        qname = q.question[0].name.to_text()
+        qtype = dns.rdatatype.to_text(q.question[0].rdtype)
+        qclass = dns.rdataclass.to_text(q.question[0].rdclass)
         try:
+            if self.isdownload is True:
+                return self.packing(self.db.GetFromCache(qname,qclass,qtype), P, q)
+        except:
+            logging.error('Making bytes objects for local cache is fail')
+      
+
+    def upload(self, db:AccessDB):
+        try:
+
             # -- DEBUG LOGGING BLOCK START --
             if self.cache and logging.DEBUG >= logging.root.level:
                 emptyid = int.to_bytes(0,2,'big')
@@ -126,18 +146,9 @@ class Caching:
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --
 
-            if self.isdownload is True:
-                self.packing(db.GetFromCache())
-                for e in set(self.cache.keys()) ^ self.keys: self.cache.pop(e)
-        except:
-            logging.error('Making bytes objects for local cache is fail', exc_info=True)
-      
-
-    def upload(self, db:AccessDB, data=None):
-        try:
+            [self.cache.pop(e) for e in self.cache.keys()]
             db.CacheExpired(expired=getnow(self.timedelta, 0))
             if eval(self.conf['CACHING']['upload']) is True:           
-                if data: self.temp = [data]
                 if self.temp:
                     data = []
                     for result in self.temp:
@@ -154,7 +165,7 @@ class Caching:
                         if db.PutInCache(data, min(ttl)) is True:
                             [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('Making local cache data to database storage format and uploading it is fail')
+            logging.error('Convert uploading cache is fail')
 
 
 

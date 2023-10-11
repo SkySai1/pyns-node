@@ -10,10 +10,10 @@ import ipaddress
 _OPTIONS ={
     'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'AUTHORITY': [],
-    'CACHING': ['expire', 'size', 'download', 'upload'],
+    'CACHING': ['expire', 'scale', 'size', 'download', 'upload'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
-    'LOGGING' : ['enable', 'keeping', 'pathway' , 'minimum', 'separate', 'maxsize']
+    'LOGGING' : ['enable', 'keeping', 'pathway' , 'level', 'separate', 'maxsize','rotation']
 }
 
 def getconf(path):
@@ -43,6 +43,7 @@ def checkconf(CONF:configparser.ConfigParser):
                     if opt[0] == 'listen-port': int(opt[1])
                     if opt[0] == 'printstats': eval(opt[1])
                     if opt[0] == 'expire': float(opt[1])
+                    if opt[0] == 'scale': float(opt[1])
                     if opt[0] == 'size': int(opt[1])
                     if opt[0] == 'enable': eval(opt[1])
                     if opt[0] == 'resolver' and opt[1] != '': ipaddress.ip_address(opt[1]).version == 4
@@ -60,10 +61,11 @@ def checkconf(CONF:configparser.ConfigParser):
                                 msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir do not exist")
                         elif not os.access(opt[1], os.R_OK):
                             msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir without read access ")
-                    if opt[0] == 'minimum':
+                    if opt[0] == 'level':
                         if opt[1] not in ['debug', 'info', 'warning', 'error', 'critical']: raise Exception
                     if opt[0] == 'maxsize':
                         if not re.match('^[0-9]*[b|k|m|g]$', opt[1].lower()):raise Exception
+                    if opt[0] == 'rotation': int(opt[1])
                     if opt[0] == 'download': eval(opt[1])
                     if opt[0] == 'upload': eval(opt[1])
                 except:
@@ -93,6 +95,7 @@ def deafultconf():
         hostname = os.uname()[1]  # doesnt work on windows
 
     config = configparser.ConfigParser(allow_no_value=True)
+    config.optionxform = str
     DBHost = str(input('Input HOSTNAME of your Data Base:\n'))    
     DBUser = str(input('Input USER of your Data Base:\n'))
     DBPass = str(input('Input PASSWORD of your Data Base\'s user:\n'))
@@ -111,6 +114,8 @@ def deafultconf():
     config['CACHING'] = {
         ";Time to clear of core cache data":None,
         'expire': 5,
+        ";Max multimeter of expire in high load":None,
+        'scale': 10,
         ";Max size of core cache (cache data per core) in bytes":None,
         'size': 1048576,
         ";Is to download cache data from node into DB = False|True":None,
@@ -120,7 +125,7 @@ def deafultconf():
     }
     config['RECURSION'] = {
         'enable': False,
-        ";specify another recursion DNS server": None,
+        ";Specify another recursion DNS server": None,
         'resolver': '',
         'maxdepth': 30,
         'timeout': 0.5,
@@ -138,18 +143,21 @@ def deafultconf():
         'node': hostname,
     }
     config['LOGGING'] = {
-    ";enable logging = False|True": None,
-    'enable': True, 
-    ";log storage (in DB or file) = db|file|both": None,
-    'keeping': 'both', 
-    ";folder where is logfiles placing, actually while 'keeping' is file or both":None,
-    'pathway': './logs/' , 
-    ";minimum level of log events = debug|info|warning|error|critical":None,
-    'minimum': 'error',
-    ";will separate log files by level = False|True":None, 
-    'separate': True,
-    ";max size of anyone log files = 1048576B|1024K|1M|1G":None,
-    'maxsize': '1M'
+        ";Enable logging = False|True": None,
+        'enable': True, 
+        ";Minimum level of log events = debug|info|warning|error|critical":None,
+        'level': 'error',
+        ";Log storage (in database or in file) = db|file|both": None,
+        'keeping': 'both',
+        "### Applying only with log keeping as in file or both ###":None, 
+        ";Folder where is logfiles placing, actually while 'keeping' is file or both":None,
+        'pathway': './logs/' , 
+        ";Will separate log files by level = False|True":None, 
+        'separate': True,
+        ";Max size of each log file = 1048576B|1024K|1M|1G":None,
+        'maxsize': '1M',
+        ";Rotation, number of backup copies after reach maxsize = 5":None,
+        'rotation': 5
     }
     return config
 

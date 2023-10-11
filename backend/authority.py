@@ -23,6 +23,7 @@ import dns.tsig
 
 
 class Authority:
+    db = None
 
     def __init__(self, conf, _rec:Recursive, auth:DictProxy, zones:ListProxy):
         try:
@@ -33,8 +34,8 @@ class Authority:
         except:
             logging.critical('initialization of authority module is fail')
     
-    def connect(self, engine):
-        self.db = AccessDB(engine, self.conf)
+    def connect(self, db:AccessDB):
+        self.db = db
 
 
     def findnode(self, qname:dns.name.Name, rdclass:str):

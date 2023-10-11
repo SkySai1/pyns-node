@@ -41,7 +41,8 @@ class Helper:
     def cacheupdate(self):
         try:
             self.cache.upload(self.db)
-            self.cache.download(self.db)
+            #self.cache.download(self.db)
+            pass
         except:
             logging.error('Update cache data is fail.')
 

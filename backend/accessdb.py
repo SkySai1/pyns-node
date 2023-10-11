@@ -31,6 +31,7 @@ def enginer(_CONF):
             pool_pre_ping=True
         )
         if checkconnect(engine, _CONF) is True:
+            logging.debug(f"Created new database engine {engine.url}")
             return engine
         else: raise Exception()
     except Exception as e: 
@@ -125,6 +126,7 @@ class AccessDB:
         self.timedelta = int(_CONF['GENERAL']['timedelta'])
         self.node = _CONF['DATABASE']['node']
         self.c = Session(engine)
+        logging.debug(f"Initialize new database connect '{engine.url}'")
 
     def drop(self):
         logging.error('Database is lost connection')
@@ -207,6 +209,12 @@ class AccessDB:
         try:
             for record in data:
                 name = record.get('name')
+                spl = name.split('.')
+                decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
+                zone = self.c.execute(select(Zones.name).filter(Zones.name.in_(decomp))).first()
+                if zone:
+                    logging.debug(f"{name} was not caching, zone {zone[0]} already exist")
+                    continue
                 record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
                 stmt = (select(Cache)
                     .filter(Cache.name == name)
@@ -230,27 +238,18 @@ class AccessDB:
             
     def GetFromCache(self, qname = None, qclass = None, qtype = None):
         try:
-            if not qname and not qclass and not qtype:
-                result = self.c.execute(select(Cache)).fetchall()
-                return result
-            if qtype == 'A':
-                stmt = (select(Cache)
-                    .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
-                    .filter(Cache.cls == qclass)
-                    .filter(or_(Cache.type == 'A', Cache.type == 'CNAME'))
-                )
-                result = self.c.execute(stmt).fetchall()
-                for obj in result:
-                    for row in obj:
-                        if row.type == 'CNAME':
-                            result = AccessDB.getCNAME(self.c, [row.name, row.data])
-            else:
-                stmt = (select(Cache)
-                        .filter(or_(Cache.name == qname, Cache.name == qname[:-1]))
-                        .filter(Cache.cls == qclass)
-                        .filter(Cache.type == qtype)
-                )
-                result = self.c.execute(stmt).fetchall()
+            if not qname: qname = (Cache.name == Cache.name)
+            else: qname = (Cache.name == qname)
+            if not qclass: qclass = (Cache.cls == Cache.cls)
+            else: qclass = (Cache.cls == qclass)
+            if not qtype: qtype = (Cache.type == Cache.type)
+            else: qtype = (Cache.type == qtype)
+            stmt = (select(Cache)
+                    .filter(qname)
+                    .filter(qclass)
+                    .filter(qtype)
+            )
+            result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
             logging.error('Download cache data from database is fail')
