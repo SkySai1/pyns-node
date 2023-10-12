@@ -3,7 +3,7 @@ import logging
 from multiprocessing.managers import DictProxy, ListProxy
 import random
 from backend.accessdb import AccessDB, enginer
-from backend.functions import echo, toobig
+from backend.functions import echo
 from backend.transfer import Transfer
 from backend.recursive import Recursive, Depth, _ROOT
 from backend.packet import Packet
@@ -129,7 +129,9 @@ class Authority:
             if qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
                     T = Transfer(self.conf, qname, addr, key, q.keyname, q.keyalgorithm)
-                    return T.sendaxfr(q,transport), None, False
+                    result = T.sendaxfr(q,transport)
+                    if not result: raise Exception()
+                    return result, None, False
                 except:
                     logging.error('Sending transfer was failed')
                     return echo(data,dns.rcode.SERVFAIL)

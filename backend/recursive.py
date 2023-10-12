@@ -67,14 +67,14 @@ class Recursive:
             self.retry = int(_CONF['RECURSION']['retry'])
             self.resolver = _CONF['RECURSION']['resolver']
         except:
-            logging.critical('initialization of recursive module is fail')
+            logging.critical('Initialization of recursive module is fail.')
 
     def recursive(self, P):
         # - External resolving if specify external DNS server
         try:
             data = P.data
             transport = P.transport
-            query = dns.message.from_wire(data)
+            query = dns.message.from_wire(data, continue_on_error=True, ignore_trailing=True)
             if self.resolver:
                 result = self.extresolve(query)
                 return result.to_wire(), result, True
@@ -90,7 +90,7 @@ class Recursive:
             else:
                 raise Exception('empty recursion result') 
         except:
-            logging.error(f'recursive search fail at \'{dns.name.from_wire(P.data,12)}\'',exc_info=True)
+            logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.')
             result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
             return result.to_wire(), result, False
 
@@ -104,7 +104,7 @@ class Recursive:
             
             if _DEBUG in [1,3]: print(f"{depth}: {ns}") # <- SOME DEBUG
         except:
-            logging.warning(f'query \'{query.question[0].to_text()}\' was reached max recursion depth ({self.maxdepth})')
+            logging.warning(f'Query \'{query.question[0].to_text()}\' was reached max recursion depth ({self.maxdepth}).')
             return echo(query,dns.rcode.REFUSED, [dns.flags.RA]), ns
         
         # -Trying to get answer from specifing nameserver-
@@ -124,7 +124,7 @@ class Recursive:
             if dns.flags.TC in result.flags:
                 result = dns.query.tcp(query, ns, self.timeout)
         except Exception:
-            logging.error(f'recursion fail at \'{query.question[0].to_text()}\' querie')
+            logging.error(f'Query\'{query.question[0].to_text()}\' is recursion fail.')
             return echo(query,dns.rcode.SERVFAIL, [dns.flags.RA]), ns
 
         if result.answer:

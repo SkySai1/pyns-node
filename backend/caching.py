@@ -117,8 +117,10 @@ class Caching:
                         self.cache[key] = result
                 logging.debug(f"{name} was found in basecache")
                 return result
+            else:
+                return None
         except:
-            logging.error('Packing cache data is fail',exc_info=True)
+            logging.error('Packing cache data is fail')
 
 
     def download(self, P:Packet):
@@ -137,7 +139,7 @@ class Caching:
         try:
 
             # -- DEBUG LOGGING BLOCK START --
-            if self.cache and logging.DEBUG >= logging.root.level:
+            if self.cache and logging.DEBUG >= logging.root.level and not logging.root.disabled:
                 emptyid = int.to_bytes(0,2,'big')
                 queries = []
                 for data in self.cache.values():

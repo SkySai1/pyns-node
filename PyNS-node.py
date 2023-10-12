@@ -3,6 +3,8 @@ import datetime
 import ipaddress
 import logging
 import asyncio
+import struct
+from logging.handlers import DEFAULT_UDP_LOGGING_PORT
 from multiprocessing import Process, cpu_count, Pipe, current_process, Manager
 import sys
 import threading
@@ -22,7 +24,8 @@ from backend.packet import Packet
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
-from backend.logger import logsetup
+from backend.logger import LogServer, logsetup
+from backend.functions import ThisNode
 
 
 _COUNT = 0
@@ -35,13 +38,15 @@ def warden(data, addr, transport) -> Packet:
     P.allow.recursive()
 
     # -- INFO LOGGING BLOCK START --
-    if logging.INFO >= logging.root.level:
+    if logging.INFO >= logging.root.level and not logging.root.disabled:
         try:
-            q = dns.message.from_wire(data,continue_on_error=True)
-            question = q.question[0].to_text()
-            logging.info(f"Get Query({q.id}) from {addr} is '{question}'")
+            qid = struct.unpack('>H',data[:2])[0]
+            name,l = dns.name.from_wire(data,12)
+            qtype = struct.unpack('>B',data[14+l-1:14+l])[0]
+            qclass = struct.unpack('>B',data[16+l-1:16+l])[0]
+            logging.info(f"Get Query({qid}) from {addr} '{name.to_text()} {qclass} {qtype}'")
         except:
-            logging.info(f"Query from {addr} is malformed!")
+            logging.info(f"Query from {addr} is malformed!", exc_info=True)
     # -- INFO LOGGING BLOCK END --
     return P
 
@@ -52,7 +57,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
         P = warden(data, addr, transport)
 
         # -- DEBUG LOGGING BLOCK START --
-        if logging.DEBUG >= logging.root.level:
+        if logging.DEBUG >= logging.root.level and not logging.root.disabled:
             debug = True
             try:
                 qid = int.from_bytes(data[:2],'big')
@@ -122,9 +127,9 @@ class UDPserver(asyncio.DatagramProtocol):
         result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr, self.transport)
         
         # -- INFO LOGGING BLOCK START --
-        if logging.INFO >= logging.root.level:
+        if logging.INFO >= logging.root.level and not logging.root.disabled:
             qid = int.from_bytes(data[:2],'big')
-            rcode = dns.rcode.to_text(int.from_bytes(result[3:4],'big'))
+            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
             logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
         # -- INFO LOGGING BLOCK END --
 
@@ -154,9 +159,9 @@ class TCPServer(asyncio.Protocol):
         l = result.__len__().to_bytes(2,'big')
 
         # -- INFO LOGGING BLOCK START --
-        if logging.INFO >= logging.root.level:
+        if logging.INFO >= logging.root.level and not logging.root.disabled:
             qid = int.from_bytes(data[:2],'big')
-            rcode = dns.rcode.to_text(int.from_bytes(result[3:4],'big'))
+            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
             logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
         # -- INFO LOGGING BLOCK END --
 
@@ -207,8 +212,8 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
         port = int(CONF['GENERAL']['listen-port'])
         l = []
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,name='UDP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
-            threading.Thread(target=listener,name='TCP',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
+            threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
+            threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
             threading.Thread(target=_cache.debuff, daemon=True).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
         else:
@@ -246,7 +251,8 @@ def counter(pipe, output:bool = False):
         
 # --- Main Function ---
 def start(CONF):
-    logsetup(CONF, __name__)
+    ThisNode.name = CONF['DATABASE']['node']
+    logreciever = logsetup(CONF, __name__)
     logging.debug('PyNS IS STARTED!')
     try: 
         with Manager() as manager:
@@ -262,7 +268,7 @@ def start(CONF):
             logging.debug('AUTHORITY module was init successful')
             
             
-            helper = Helper(CONF, _cache, _auth)
+            helper = Helper(CONF, _cache, _auth, logreciever)
             logging.debug('HELPER module was init successful')  
 
             helper.connect(enginer(CONF))
@@ -274,7 +280,7 @@ def start(CONF):
             for i in range(cpu_count()):
                 try:
                     gather, stat = Pipe()
-                    name = f'listener#{i}'
+                    name = f'Listener#{i}'
                     p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive), name=name)
                     p.start()
                     logging.debug(f'New Listener ({name}) was started successful')
@@ -283,7 +289,7 @@ def start(CONF):
                 except:
                     logging.critical(f'Fail with up {name}')
             # -Start background worker
-            p = Process(target=helper.watcher, name='watcher')
+            p = Process(target=helper.watcher, name='Watcher')
             p.start()
             Stream.append(p)
             # -Counter-
@@ -299,6 +305,7 @@ def start(CONF):
     except:
         logging.critical('Some problems with starting')
         sys.exit(1)
+
 
 if __name__ == "__main__":
     try:

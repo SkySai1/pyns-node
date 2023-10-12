@@ -8,7 +8,7 @@ import dns.rdataclass
 import dns.rdatatype
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, exc, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
-from backend.functions import getnow
+from backend.functions import getnow, ThisNode
 from backend.rulesmaker import makerules
 from backend.recursive import QTYPE, CLASS
 
@@ -42,7 +42,6 @@ class Nodes(Base):
     __tablename__ = "nodes"
     id = Column(Integer, primary_key=True)
     node = Column(String(255), nullable=False, unique=True)
-    #addr = Column(String(24), nullable=False, unique=True)
     active = Column(DateTime(timezone=True), nullable=False) 
 
 
@@ -90,11 +89,13 @@ class Rules(Base):
 class Logs(Base):
     __tablename__ = "logs"
     uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    node = Column(String(255), nullable=False, unique=True)
-    date = Column(DateTime(timezone=True), nullable=False)
+    node_id = Column(Integer, ForeignKey('nodes.id', ondelete='cascade'), nullable=False)
+    dt = Column(DateTime(timezone=True), nullable=False)
     level = Column(String(20), nullable=False)
+    prcoess = Column(String(255))
     thread = Column(String(255), nullable=False)
     message = Column(Text)
+
 
 class Join_ZonesRules(Base):
     __tablename__ = "zones_rules"
@@ -116,6 +117,8 @@ class Join_ZonesTkeys(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     zone_id = Column(Integer, ForeignKey('zones.id', ondelete='cascade'))
     tkey_id = Column(Integer, ForeignKey('tsigkeys.id', ondelete='cascade'))
+
+
 
 class AccessDB:
 
@@ -147,6 +150,16 @@ class AccessDB:
         )
         return self.c.execute(stmt).fetchall()
     
+    def LogsInsert(self, data):
+        try:
+            self.c.execute(insert(Logs), data)
+            self.c.commit()
+        except Exception as e:
+            logging.error('Logs load to database is fail', exc_info=True)
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()    
+
+
     # -- Nodes work --
     def NodeUpdate(self):
         try:
@@ -162,6 +175,7 @@ class AccessDB:
                     ))
             self.c.execute(stmt)
             self.c.commit()
+            return check
         except Exception as e:
             logging.error('Node update status is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
