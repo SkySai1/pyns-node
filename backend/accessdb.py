@@ -150,12 +150,76 @@ class AccessDB:
         )
         return self.c.execute(stmt).fetchall()
     
+    def GetTsig(self, qname:str, keyname:str=None):
+        if not keyname: keyname = (Tkeys.name == Tkeys.name)
+        else: keyname = (Tkeys.name == keyname)
+        spl = qname.split('.')
+        decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
+        stmt = (select(Tkeys)
+                .join(Join_ZonesTkeys, Join_ZonesTkeys.tkey_id == Tkeys.id)
+                .join(Zones, Join_ZonesTkeys.zone_id == Zones.id)
+                .filter(keyname)
+                .filter(Zones.name.in_(decomp))
+        )
+        rawkeys = self.c.execute(stmt).fetchall()
+        keylist = {}
+        for obj in rawkeys:
+            obj = obj[0]
+            keylist[obj.name] = obj.value
+        return keylist
+
+    def NewTsig(self, keyname, key):
+        try:
+            check = select(Tkeys.id).filter(Tkeys.name == keyname).filter(Tkeys.value == key)
+            id = self.c.scalars(check).one()
+            if id:
+                return id, False
+
+            stmt = insert(Tkeys).values(name = keyname, value = key).returning(Tkeys.id) 
+            id = self.c.scalars(stmt).one()
+            self.c.commit()
+            return id, True
+        except Exception as e:
+            logging.error('TSIG add in database is fail', exc_info=True)
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()
+            return None, False                
+
+    def TsigAssign(self, zone_id, tsig_id):
+        try:
+            check = (select(Join_ZonesTkeys)
+                    .filter(Join_ZonesTkeys.zone_id == zone_id)
+                    .filter(Join_ZonesTkeys.tkey_id == tsig_id)
+            )
+            if self.c.execute(check).first(): return False
+
+            stmt = insert(Join_ZonesTkeys).values(zone_id = zone_id, tkey_id = tsig_id)
+            self.c.execute(stmt)
+            self.c.commit()
+        except Exception as e:
+            logging.error('TSIG assigning is fail', exc_info=True)
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()     
+
+    def TsigUpdate(self, zone_id, keyname, key):
+        try:
+            check = (select(Join_ZonesTkeys).join(Tkeys.name == keyname)
+                     .filter(Tkeys.value == key)
+                     .filter(Join_ZonesTkeys.zone_id == zone_id))
+            if self.c.execute(check).first(): return False
+
+            stmt = (insert(Tkeys))
+        except Exception as e:
+            logging.error('TSIG update is fail', exc_info=True)
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()                
+
     def LogsInsert(self, data):
         try:
             self.c.execute(insert(Logs), data)
             self.c.commit()
         except Exception as e:
-            logging.error('Logs load to database is fail', exc_info=True)
+            logging.error('Logs load to database is fail')
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()    
 

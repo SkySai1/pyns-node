@@ -119,16 +119,26 @@ class Authority:
             addr = P.addr
             transport = P.transport
             isrec = True
-            key = dns.tsigkeyring.from_text({
-                "tinirog-waramik": "302faOimRL7J6y7AfKWTwq/346PEynIqU4n/muJCPbs="
-            })
-            q = dns.message.from_wire(data, ignore_trailing=True, keyring=key)
+            keyring = None
+            for i in range(2):
+                try:
+                    if i > 1:
+                        r = echo(data,dns.rcode.REFUSED)
+                        return r.to_wire(), r, True
+                    q = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
+                    break
+                except dns.message.UnknownTSIGKey:
+                    name = dns.name.from_wire(data,12)[0]
+                    keyring = dns.tsigkeyring.from_text(self.db.GetTsig(name.to_text()))
+                    continue
+
             qname = q.question[0].name
             qtype = dns.rdatatype.to_text(q.question[0].rdtype)
             qclass = dns.rdataclass.to_text(q.question[0].rdclass)
-            if qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
+            if q.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
-                    T = Transfer(self.conf, qname, addr, key, q.keyname, q.keyalgorithm)
+
+                    T = Transfer(self.conf, qname, addr, keyring, q.keyname, q.keyalgorithm)
                     result = T.sendaxfr(q,transport)
                     if not result: raise Exception()
                     return result, None, False

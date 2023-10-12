@@ -15,7 +15,6 @@ import dns.tsig
 import dns.rrset
 import dns.flags
 import dns.xfr
-#from PyDNS import create_engine
 from backend.functions import getnow
 from backend.zonemanager import Zonemaker
 
@@ -43,6 +42,7 @@ class Transfer:
             self.tsig = tsig
             self.keyname = keyname
             self.alogorithm = algorithm
+
         except:
             logging.critical('initialization of authority module is fail')
 
@@ -104,17 +104,17 @@ class Transfer:
                 i += 1
         try:    
             Z = Zonemaker(self.conf)
-            id = Z.zonecreate({
+            z_id = Z.zonecreate({
                 'name' : zone.origin.to_text(),
                 'type' : 'slave'
             })
-            if id is False: raise Exception
+            if z_id is False: raise Exception
             data = []
             for part in zone.iterate_rdatasets():
                 name = part[0]
                 rdata = part[1]
                 data.append({
-                    'zone_id': id,
+                    'zone_id': z_id,
                     'name':name.to_text(),
                     'ttl':rdata.ttl,
                     'cls': dns.rdataclass.to_text(rdata.rdclass),
@@ -128,7 +128,12 @@ class Transfer:
                 "retry": soa.retry
             }
             Z.zonefilling(data)
-            Z.zonepolicy(id, policy)
+            Z.zonepolicy(z_id, policy)
+            try:
+                t_id = Z.tsigadd(self.keyname, self.tsig)
+                if t_id: Z.tsigassignment(z_id,t_id)
+            except:
+                logging.error('Fail to add tsig into database',exc_info=True)
             return True, None
         except:
             m = f"making AXFR data from '{self.target}' is fail"

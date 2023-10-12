@@ -12,6 +12,17 @@ class Zonemaker:
         except:
             logging.critical('initialization of zonemaker module is fail')
     
+    def __del__(self):
+        self.db.c.close()
+        self.db.engine.dispose()
+
+    def tsigadd(self, keyname, key):
+        id, state = self.db.NewTsig(keyname, key)
+        return id
+
+    def tsigassignment(self, zone_id, tsig_id):
+        self.db.TsigAssign(zone_id,tsig_id)
+
     def zonecreate(self, zone):
         try:
             id = self.db.ZoneCreate(zone)

@@ -137,7 +137,7 @@ enable = True
 - ✅ **CNAME recursion** *Recursion search if rdata is not exist in database*
 - ✅ **Authoirty former** *Make authoirty information for answer records*
 - 🚩 **Politics and settings for zones** *Awaitng master release* 
-- 🚩 **TSIG keeping with zones binding** *Awaitng master release*
+- ✅ **TSIG keeping with zones binding** *Awaitng master release*
 - 🚩 **Retransfer and zone purging** *Awaitng master release*
 
 
