@@ -104,9 +104,9 @@ enable = True
 ### GENERAL
 - ✅ **Async queries resolving.** *Done. Asyncio with multiproccessing*
 - ✅ **Configuration from file.** *Done.*
-- 🚩 **Logging mechanism** ...
-- 🚩 **Expand settings and politics** ...
-- 🚩 **Debug mode** ...
+- ✅ **Logging mechanism** *Done.*
+- 🚩 **Expand settings and politics** *Awaitng master release*
+- ✅ **Debug mode** *Done. As part of logging*
 
 ### CACHING
 - ✅ **Put and Get mechanism.** *Done. Via class*.
@@ -134,20 +134,20 @@ enable = True
 - ✅ **Return zones via transfer** *Done. Need to realese download keys from DB*
 - ✅ **Return zones via transfer with TSIG** *Done. It's finily working!*
 - ✅ **CNAME maker across zones** *For A querie response with CNAME hierarchy* 
-- 🚩 **CNAME recursion** *Recursion search if rdata is not exist in database*
-- 🚩 **Authoirty former** *Make authoirty information for answer records*
-- 🚩 **Politics and settings for zones** ... 
-- 🚩 **TSIG keeping with zones binding** ...
-- 🚩 **Retransfer and zone purging** ...
+- ✅ **CNAME recursion** *Recursion search if rdata is not exist in database*
+- ✅ **Authoirty former** *Make authoirty information for answer records*
+- 🚩 **Politics and settings for zones** *Awaitng master release* 
+- 🚩 **TSIG keeping with zones binding** *Awaitng master release*
+- 🚩 **Retransfer and zone purging** *Awaitng master release*
 
 
 ### DATABASE
 - ✅ **Database scheme**. *Done.*
 - ✅ **Zones with domains** *Done. Foreign key one to many*
 - ✅ **Cache table** *Done.*
-- 🚩 **Store TSIG keys into DB** *With zone binding*
-- 🚩 **Nodes table with nodes groups**
-- 🚩 **Bind all zones to nodes groups**
+- 🚩 **Store TSIG keys into DB** *With zone binding. *Awaitng master release**
+- 🚩 **Nodes table with nodes groups** *Awaitng master release*
+- 🚩 **Bind all zones to nodes groups** **Awaitng master release*
 
 ### FRONTEND
 - 🚩 **Domain and Cache managment form** ...
