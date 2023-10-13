@@ -107,7 +107,7 @@ class Join_ZonesRules(Base):
 class Tkeys(Base):
     __tablename__ = "tsigkeys"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), unique=True, nullable=False)
     value = Column(String(255), nullable=False) 
     zones = relationship("Zones", secondary="zones_tsigkeys", back_populates="tsigkeys", cascade='delete', single_parent=True)
 
