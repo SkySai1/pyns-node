@@ -53,8 +53,8 @@ class Zonemaker:
      import datetime
      now = datetime.datetime.now()
      soa = zone.get_soa()
-     ZKS = self.load_key('ZKS.pem')
-     KSK = self.load_key('KSK.pem')
+     #ZKS = self.load_key('ZKS.pem')
+     KSK = ZKS = self.load_key('KSK.pem')
      dnskey = dns.dnssec.make_dnskey(KSK.public_key(), dns.dnssec.RSASHA256)
      dnskey_rr = dns.rrset.from_rdata(zone.origin, 600 , dnskey)
      

@@ -268,7 +268,7 @@ class AccessDB:
                     rdtype = (Domains.type.in_(rdtype))                
             if not rdclass: rdclass = Domains.cls
             if not zone: zone = Zones.name
-            stmt = (select(Domains, Zones.name).join(Zones)
+            stmt = (select(Domains, Zones).join(Zones)
                     .filter(state)
                     .filter(rdtype)
                     .filter(Domains.cls == rdclass)
