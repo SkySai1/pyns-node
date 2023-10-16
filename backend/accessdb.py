@@ -73,6 +73,7 @@ class Cache(Base):
     name = Column(String(255), nullable=False)
     cls = Column(String(2), default='IN')   
     type = Column(String(10))
+    eflag = Column(String(2), default=None)
     data = Column(ARRAY(String))
     cached = Column(DateTime(timezone=True), nullable=False)  
     expired = Column(DateTime(timezone=True), nullable=False)  
@@ -290,7 +291,7 @@ class AccessDB:
                 spl = name.split('.')
                 decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
                 zone = self.c.execute(select(Zones.name).filter(Zones.name.in_(decomp))).first()
-                if zone:
+                if zone and False:
                     logging.debug(f"{name} was not caching, zone {zone[0]} already exist")
                     continue
                 record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
@@ -298,6 +299,7 @@ class AccessDB:
                     .filter(Cache.name == name)
                     .filter(Cache.cls == record.get('cls'))
                     .filter(Cache.type == record.get('type'))
+                    .filter(Cache.eflag == record.get('eflag')) 
                 )
                 result = self.c.execute(stmt).first()
                 if not result:
@@ -314,7 +316,7 @@ class AccessDB:
             return False
 
             
-    def GetFromCache(self, qname = None, qclass = None, qtype = None):
+    def GetFromCache(self, qname = None, qclass = None, qtype = None, eflag = None):
         try:
             if not qname: qname = (Cache.name == Cache.name)
             else: qname = (Cache.name == qname)
@@ -326,6 +328,7 @@ class AccessDB:
                     .filter(qname)
                     .filter(qclass)
                     .filter(qtype)
+                    .filter(Cache.eflag == eflag)
             )
             result = self.c.execute(stmt).fetchall()
             return result

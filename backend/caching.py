@@ -128,9 +128,11 @@ class Caching:
         qname = q.question[0].name.to_text()
         qtype = dns.rdatatype.to_text(q.question[0].rdtype)
         qclass = dns.rdataclass.to_text(q.question[0].rdclass)
+        if q.ednsflags == dns.flags.DO: eflag = 'DO'
+        else: eflag = None
         try:
             if self.isdownload is True:
-                return self.packing(self.db.GetFromCache(qname,qclass,qtype), P, q)
+                return self.packing(self.db.GetFromCache(qname,qclass,qtype,eflag), P, q)
         except:
             logging.error('Making bytes objects for local cache is fail')
       
@@ -147,7 +149,6 @@ class Caching:
                     queries.append(f"'{q.question[0].to_text()}'")                   
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --
-
             [self.cache.pop(e) for e in self.cache.keys()]
             db.CacheExpired(expired=getnow(self.timedelta, 0))
             if eval(self.conf['CACHING']['upload']) is True:           
@@ -155,12 +156,15 @@ class Caching:
                     data = []
                     for result in self.temp:
                         q = result.question[0]
+                        if result.ednsflags == dns.flags.DO: eflag = 'DO'
+                        else: eflag = None
                         ttl = [record.ttl for record in result.answer]
                         if ttl:
                             data.append({
                                 'name':q.name.to_text().encode('utf-8').decode('idna'),
                                 'cls': dns.rdataclass.to_text(q.rdclass),
                                 'type': dns.rdatatype.to_text(q.rdtype),
+                                'eflag': eflag,
                                 'data':[record.to_text() for record in result.answer]
                             })
                     if data:                      

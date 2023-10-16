@@ -33,8 +33,8 @@ _COUNT = 0
 def warden(data, addr, transport) -> Packet:
     P = Packet(data,addr, transport)
     P.allow.query()
-    #P.allow.cache()
-    P.allow.authority()
+    P.allow.cache()
+    #P.allow.authority()
     P.allow.recursive()
 
     # -- INFO LOGGING BLOCK START --
