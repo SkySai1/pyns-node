@@ -46,7 +46,7 @@ def warden(data, addr, transport) -> Packet:
             qclass = struct.unpack('>B',data[16+l-1:16+l])[0]
             logging.info(f"Get Query({qid}) from {addr} '{name.to_text()} {qclass} {qtype}'")
         except:
-            logging.info(f"Query from {addr} is malformed!", exc_info=True)
+            logging.info(f"Query from {addr} is malformed!", exc_info=(logging.DEBUG >= logging.root.level))
     # -- INFO LOGGING BLOCK END --
     return P
 
@@ -66,7 +66,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
                 logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Set permissions - Allow: '{P.getperms(as_text=True)}.'")
             except:
                 qid = '00000'
-                logging.debug(f"Query from {addr} is malformed!. Set permissions - Allow: '{P.getperms(as_text=True)}.'")        
+                logging.debug(f"Query from {addr} is malformed!. Set permissions - Allow: '{P.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
         else: debug = None
 
         # -- DEBUG LOGGING BLOCK END --
@@ -101,8 +101,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'Fail handle query {result.question[0].to_text()}', exc_info=True)
-        return result.to_wire()
+        logging.error(f'Fail handle query {result.question[0].to_text()}', exc_info=(logging.DEBUG >= logging.root.level))
 
 
 # --- UDP socket ---
@@ -186,7 +185,7 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
     except KeyboardInterrupt:
         pass
     except:
-        logging.critical(f'Start new listener is fail {current_process().name}.')
+        logging.critical(f'Start new listener is fail {current_process().name}.', exc_info=(logging.DEBUG >= logging.root.level))
         sys.exit(1)
 
 
@@ -219,7 +218,7 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
         else:
             logging.error(f"{ip} is not available")
     except Exception as e:
-        logging.critical('some problem with main launcher')
+        logging.critical('some problem with main launcher', exc_info=(logging.DEBUG >= logging.root.level))
 
 
 # --- Some Functions ---
@@ -247,7 +246,7 @@ def counter(pipe, output:bool = False):
                 _COUNT = 0
                 time.sleep(1)
     except:
-        logging.error('some problem with counter')
+        logging.error('Some problem with counter.', exc_info=(logging.DEBUG >= logging.root.level))
         
 # --- Main Function ---
 def start(CONF):
@@ -287,7 +286,7 @@ def start(CONF):
                     Stream.append(p)
                     Parents.append(gather)
                 except:
-                    logging.critical(f'Fail with up {name}')
+                    logging.critical(f'Fail with up {name}', exc_info=(logging.DEBUG >= logging.root.level))
             # -Start background worker
             p = Process(target=helper.watcher, name='Watcher')
             p.start()
@@ -303,7 +302,7 @@ def start(CONF):
         for p in Stream:
             p.terminate()
     except:
-        logging.critical('Some problems with starting')
+        logging.critical('Some problems with starting', exc_info=(logging.DEBUG >= logging.root.level))
         sys.exit(1)
 
 
@@ -321,7 +320,7 @@ if __name__ == "__main__":
         if state is False:
             raise Exception()
     except:
-        logging.critical('Error with manual start')
+        logging.critical('Error with manual start', exc_info=(logging.DEBUG >= logging.root.level))
         sys.exit(1)
     start(CONF)
 

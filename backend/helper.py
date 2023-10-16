@@ -54,14 +54,14 @@ class Helper:
                     ThisNode.id = obj.id
                     pass
         except:
-            logging.error('Update node info is fail.')
+            logging.error('Update node info is fail.', exc_info=(logging.DEBUG >= logging.root.level))
     def cacheupdate(self):
         try:
             self.cache.upload(self.db)
             #self.cache.download(self.db)
             pass
         except:
-            logging.error('Update cache data is fail.')
+            logging.error('Update cache data is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
     def logload(self):
         try:
@@ -86,7 +86,7 @@ class Helper:
         try:    
             self.auth.download(self.db)
         except:
-            logging.exception('Update zones data is fail.')
+            logging.exception('Update zones data is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
     def unslave(self, db:AccessDB):
         try:

@@ -16,7 +16,7 @@ def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:l
             result.flags = dns.flags.Flag(sum(flags))
         return result
     except:
-        logging.error('making echo dns answer is fail',exc_info=True)
+        logging.error('Making echo dns answer is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
 def getnow(delta, rise):
     '''
@@ -29,7 +29,7 @@ def getnow(delta, rise):
         now = datetime.datetime.now(tz=tz)
         return now + datetime.timedelta(0,rise) 
     except:
-        logging.error('making date is fail')
+        logging.error('Making date is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
 class ThisNode:
     id = None

@@ -32,7 +32,7 @@ class Authority:
             self.auth = auth
             self.zones = zones
         except:
-            logging.critical('initialization of authority module is fail')
+            logging.critical('initialization of authority module is fail', exc_info=(logging.DEBUG >= logging.root.level))
     
     def connect(self, db:AccessDB):
         self.db = db
@@ -143,7 +143,7 @@ class Authority:
                     if not result: raise Exception()
                     return result, None, False
                 except:
-                    logging.error('Sending transfer was failed')
+                    logging.error('Sending transfer was failed', exc_info=(logging.DEBUG >= logging.root.level))
                     return echo(data,dns.rcode.SERVFAIL)
             node, zone, auth, state = self.findnode(qname, qclass)
             if not zone: return None, None, False
@@ -152,7 +152,6 @@ class Authority:
                 if state is True:
                     r.flags += dns.flags.AA
                     if node:
-                        #for e in node: print(e.name, e.type, e.data)
                         r.answer = self.filling(node,[qtype, 'CNAME'])
                         if r.answer and qtype != 'CNAME':
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
@@ -189,7 +188,7 @@ class Authority:
                     return r.to_wire(max_size=65535), r, True
             
         except:
-            logging.error('get data from local zones is fail', exc_info=True)
+            logging.error('get data from local zones is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return echo(q,dns.rcode.SERVFAIL).to_wire(), False
 
     '''def download(self, db:AccessDB):

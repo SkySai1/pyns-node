@@ -10,7 +10,7 @@ class Zonemaker:
             self.engine = enginer(self.conf)
             self.db = AccessDB(self.engine, self.conf)
         except:
-            logging.critical('initialization of zonemaker module is fail')
+            logging.critical('initialization of zonemaker module is fail', exc_info=(logging.DEBUG >= logging.root.level))
     
     def __del__(self):
         self.db.c.close()
@@ -28,19 +28,19 @@ class Zonemaker:
             id = self.db.ZoneCreate(zone)
             return id
         except:
-            logging.error(f"{zone} zone creating is fail")
+            logging.error(f"{zone} zone creating is fail", exc_info=(logging.DEBUG >= logging.root.level))
     
     def zonepolicy(self, zone_id, data):
         try:
             state = self.db.NewZoneRules(zone_id, data)
         except:
-            logging.error(f"zone making policu is fail")
+            logging.error(f"zone making policy is fail", exc_info=(logging.DEBUG >= logging.root.level))
     
     def zonefilling(self, data):
         try:
             state = self.db.NewDomains(data)
         except:
-            logging.error('zone filling data is fail')
+            logging.error('zone filling data is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
     def zoneupdnssec(self, zone):
      import dns.dnssec

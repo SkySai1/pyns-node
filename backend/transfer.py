@@ -44,7 +44,7 @@ class Transfer:
             self.alogorithm = algorithm
 
         except:
-            logging.critical('initialization of authority module is fail')
+            logging.critical('initialization of authority module is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
     def writer(self, r:dns.message.Message, transport:asyncio.Transport, tsig_ctx=None):
         data = r.to_wire(multi=True, tsig_ctx=tsig_ctx)
@@ -74,7 +74,7 @@ class Transfer:
             self.writer(r,transport,r.tsig_ctx)
             return r.to_wire()
         except:
-            logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail", exc_info=True)
+            logging.error(f"sending AXFR data init by '{q.question[0].to_text()}' querie to '{self.target}' is fail", exc_info=(logging.DEBUG >= logging.root.level))
 
 
 
@@ -100,7 +100,7 @@ class Transfer:
             except (dns.tsig.PeerBadKey):
                 return False, 'The host doesn\'t knows about this key (bad keyname)'
             except:
-                logging.error(f"getting AXFR data from '{self.target}' is fail", exc_info=True)
+                logging.error(f"getting AXFR data from '{self.target}' is fail", exc_info=(logging.DEBUG >= logging.root.level))
                 i += 1
         try:    
             Z = Zonemaker(self.conf)
@@ -133,7 +133,7 @@ class Transfer:
                 t_id = Z.tsigadd(self.keyname, self.tsig)
                 if t_id: Z.tsigassignment(z_id,t_id)
             except:
-                logging.error('Fail to add tsig into database',exc_info=True)
+                logging.error('Fail to add tsig into database', exc_info=(logging.DEBUG >= logging.root.level))
             return True, None
         except:
             m = f"making AXFR data from '{self.target}' is fail"

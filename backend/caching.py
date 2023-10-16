@@ -87,7 +87,7 @@ class Caching:
                 result = self.download(P)
             return result, False
         except:
-            logging.warning('Get local cache is fail',exc_info=True)
+            logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return P.data[2:], False
 
     def put(self, data:bytes, response:dns.message.Message, isupload:bool=True):
@@ -120,7 +120,7 @@ class Caching:
             else:
                 return None
         except:
-            logging.error('Packing cache data is fail')
+            logging.error('Packing cache data is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
 
     def download(self, P:Packet):
@@ -134,7 +134,7 @@ class Caching:
             if self.isdownload is True:
                 return self.packing(self.db.GetFromCache(qname,qclass,qtype,eflag), P, q)
         except:
-            logging.error('Making bytes objects for local cache is fail')
+            logging.error('Making bytes objects for local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
       
 
     def upload(self, db:AccessDB):
@@ -171,7 +171,7 @@ class Caching:
                         if db.PutInCache(data, min(ttl)) is True:
                             [self.temp.pop(0) for i in range(self.temp.__len__())]
         except:
-            logging.error('Convert uploading cache is fail')
+            logging.error('Convert uploading cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
 
 

@@ -67,7 +67,7 @@ class Recursive:
             self.retry = int(_CONF['RECURSION']['retry'])
             self.resolver = _CONF['RECURSION']['resolver']
         except:
-            logging.critical('Initialization of recursive module is fail.')
+            logging.critical('Initialization of recursive module is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
     def recursive(self, P):
         # - External resolving if specify external DNS server
@@ -88,7 +88,7 @@ class Recursive:
             if result:
                 return result.to_wire(), result, True
             else:
-                raise Exception('empty recursion result') 
+                raise Exception('empty recursion result', exc_info=(logging.DEBUG >= logging.root.level)) 
         except:
             logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.')
             result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
@@ -124,7 +124,7 @@ class Recursive:
             if dns.flags.TC in result.flags:
                 result = dns.query.tcp(query, ns, self.timeout)
         except Exception:
-            logging.error(f'Query\'{query.question[0].to_text()}\' is recursion fail.')
+            logging.error(f'Query\'{query.question[0].to_text()}\' is recursion fail.', exc_info=(logging.DEBUG >= logging.root.level))
             return echo(query,dns.rcode.SERVFAIL, [dns.flags.RA]), ns
 
         if result.answer:
@@ -184,7 +184,7 @@ class Recursive:
             answer,_ = dns.query.receive_udp(udp,(self.resolver, 53))
         except:
             answer = echo(query, dns.rcode.SERVFAIL, [dns.flags.RA])
-            logging.error(f'resolve \'{query.question[0].to_text()}\' querie was failed on \'{self.resolver}\' nameserver')
+            logging.error(f'Resolve \'{query.question[0].to_text()}\' querie was failed on \'{self.resolver}\' nameserver', exc_info=(logging.DEBUG >= logging.root.level))
         finally:
             return answer
 

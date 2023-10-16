@@ -35,7 +35,7 @@ def enginer(_CONF):
             return engine
         else: raise Exception()
     except Exception as e: 
-        logging.critical(f"The database is unreachable")
+        logging.critical(f"The database is unreachable", exc_info=(logging.DEBUG >= logging.root.level))
         sys.exit(1)
 
 class Nodes(Base):
@@ -181,7 +181,7 @@ class AccessDB:
             self.c.commit()
             return id, True
         except Exception as e:
-            logging.error('TSIG add in database is fail', exc_info=True)
+            logging.error('TSIG add in database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return None, False                
@@ -198,7 +198,7 @@ class AccessDB:
             self.c.execute(stmt)
             self.c.commit()
         except Exception as e:
-            logging.error('TSIG assigning is fail', exc_info=True)
+            logging.error('TSIG assigning is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()     
 
@@ -211,7 +211,7 @@ class AccessDB:
 
             stmt = (insert(Tkeys))
         except Exception as e:
-            logging.error('TSIG update is fail', exc_info=True)
+            logging.error('TSIG update is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()                
 
@@ -220,7 +220,7 @@ class AccessDB:
             self.c.execute(insert(Logs), data)
             self.c.commit()
         except Exception as e:
-            logging.error('Logs load to database is fail')
+            logging.error('Logs load to database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()    
 
@@ -242,7 +242,7 @@ class AccessDB:
             self.c.commit()
             return check
         except Exception as e:
-            logging.error('Node update status is fail')
+            logging.error('Node update status is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
 
@@ -278,7 +278,7 @@ class AccessDB:
             result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
-            logging.error('Retrieve domains data from database is fail')
+            logging.error('Retrieve domains data from database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
 
@@ -291,7 +291,7 @@ class AccessDB:
                 spl = name.split('.')
                 decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
                 zone = self.c.execute(select(Zones.name).filter(Zones.name.in_(decomp))).first()
-                if zone and False:
+                if zone:
                     logging.debug(f"{name} was not caching, zone {zone[0]} already exist")
                     continue
                 record.update(cached=getnow(self.timedelta, 0), expired=getnow(self.timedelta, ttl))
@@ -310,7 +310,7 @@ class AccessDB:
             self.c.commit()
             return True
         except Exception as e:
-            logging.error('Upload cache data to database is fail', exc_info=True)
+            logging.error('Upload cache data to database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return False
@@ -333,7 +333,7 @@ class AccessDB:
             result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
-            logging.error('Download cache data from database is fail')
+            logging.error('Download cache data from database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
 
@@ -347,7 +347,7 @@ class AccessDB:
             result = self.c.scalars(stmt).all()
             self.c.commit()
         except Exception as e:
-            logging.error('Clean cache data in database is fail')
+            logging.error('Clean cache data in database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
 
@@ -362,7 +362,7 @@ class AccessDB:
             self.c.commit()
             return result
         except Exception as e:
-            logging.error(f"Add zone {data['name']} into database is fail")
+            logging.error(f"Add zone {data['name']} into database is fail", exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return False
@@ -388,7 +388,7 @@ class AccessDB:
                     .filter(state))
             return self.c.execute(stmt).fetchall()
         except Exception as e:
-            logging.error('Retrieve zones from database is fail')
+            logging.error('Retrieve zones from database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return None
@@ -399,7 +399,7 @@ class AccessDB:
             self.c.execute(insert(Domains), data)
             self.c.commit()
         except Exception as e:
-            logging.error('Creating new domains into database is fail', exc_info=True)
+            logging.error('Creating new domains into database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
 
@@ -431,7 +431,7 @@ class AccessDB:
                 self.c.execute(stmt)
             self.c.commit()
         except Exception as e:
-            logging.error('Creating new rules into database is fail')
+            logging.error('Creating new rules into database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
     
@@ -462,7 +462,7 @@ class AccessDB:
                 self.c.commit()
             return True
         except Exception as e:
-            logging.error('Assignment rules to zones in database is fail')
+            logging.error('Assignment rules to zones in database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()
             return False

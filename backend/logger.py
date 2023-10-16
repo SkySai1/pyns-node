@@ -87,7 +87,7 @@ def logsetup(CONF, name):
         return reciever
     except Exception as e:
         print(e.with_traceback(None))
-        logging.critical('Bad loging setup')
+        logging.critical('Bad loging setup', exc_info=(logging.DEBUG >= logging.root.level))
         sys.exit(1)
     
 
