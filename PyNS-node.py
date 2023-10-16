@@ -34,7 +34,7 @@ def warden(data, addr, transport) -> Packet:
     P = Packet(data,addr, transport)
     P.allow.query()
     P.allow.cache()
-    #P.allow.authority()
+    P.allow.authority()
     P.allow.recursive()
 
     # -- INFO LOGGING BLOCK START --
@@ -88,14 +88,14 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
             if result:
                 if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
                 if iscache is True:
-                    threading.Thread(target=cache.put, args=(result, response, False)).start()
+                    threading.Thread(target=cache.put, args=(data, result, response, False)).start()
                 return result
 
         if rec is True and P.check.recursive():
             result, response, iscache = recursive.recursive(P)
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             if iscache is True:
-                threading.Thread(target=cache.put, args=(result, response, iscache)).start()
+                threading.Thread(target=cache.put, args=(data, result, response, iscache)).start()
             return result
         else:
             return echo(data,dns.rcode.REFUSED).to_wire()

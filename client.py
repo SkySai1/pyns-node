@@ -124,15 +124,15 @@ def inputer(text, what, default = False):
 def printzones():
     zlist = db.GetZones()
     if zlist:
-        header = ['ID', 'Name', 'Type']
+        header = ['ID', 'Name', 'Type', 'Signed']
         width = (os.get_terminal_size().columns - 48 - header.__len__()*2 - header.__len__())
         t = PrettyTable(header)
-        t._max_width = {'ID': 5, 'Name':width, 'Type': 7}
+        t._max_width = {'ID': 5, 'Name':width, 'Type': 7, 'Signed':5}
         t.align = 'l'
         for obj in zlist:
             row = obj[0]
             try:
-                t.add_row([row.id, row.name, row.type])
+                t.add_row([row.id, row.name, row.type, row.signed])
             except:
                 logging.exception('zone table')
         print(t)
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     except: 
         print('Filed with DB connection')
         sys.exit()
-
+    logging.root.setLevel(logging.DEBUG)
     db = AccessDB(engine, _CONF)
     try: MainMenu()
     except KeyboardInterrupt: sys.exit()

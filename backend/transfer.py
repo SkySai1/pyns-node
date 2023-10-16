@@ -100,13 +100,18 @@ class Transfer:
             except (dns.tsig.PeerBadKey):
                 return False, 'The host doesn\'t knows about this key (bad keyname)'
             except:
-                logging.error(f"getting AXFR data from '{self.target}' is fail", exc_info=(logging.DEBUG >= logging.root.level))
                 i += 1
+        if i >= 3:
+            logging.error(f"getting AXFR data from '{self.target}' is fail", exc_info=(logging.DEBUG >= logging.root.level))
+            return False, None
         try:    
             Z = Zonemaker(self.conf)
+            if zone.get_rdataset(zone.origin, dns.rdatatype.DNSKEY): sign = True
+            else: sign = False
             z_id = Z.zonecreate({
                 'name' : zone.origin.to_text(),
-                'type' : 'slave'
+                'type' : 'slave',
+                'signed': sign
             })
             if z_id is False: raise Exception
             data = []
@@ -130,8 +135,9 @@ class Transfer:
             Z.zonefilling(data)
             Z.zonepolicy(z_id, policy)
             try:
-                t_id = Z.tsigadd(self.keyname, self.tsig)
-                if t_id: Z.tsigassignment(z_id,t_id)
+                if self.tsig and self.keyname:
+                    t_id = Z.tsigadd(self.keyname, self.tsig)
+                    if t_id: Z.tsigassignment(z_id,t_id)
             except:
                 logging.error('Fail to add tsig into database', exc_info=(logging.DEBUG >= logging.root.level))
             return True, None

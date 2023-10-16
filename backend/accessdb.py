@@ -62,6 +62,7 @@ class Zones(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True)
     type = Column(String, default='master')
+    signed = Column(Boolean, default=False)
 
     rules = relationship("Rules", secondary="zones_rules", back_populates="zones", cascade='delete')
     tsigkeys = relationship("Tkeys", secondary="zones_tsigkeys", back_populates="zones", cascade='delete')
@@ -172,7 +173,7 @@ class AccessDB:
     def NewTsig(self, keyname, key):
         try:
             check = select(Tkeys.id).filter(Tkeys.name == keyname).filter(Tkeys.value == key)
-            id = self.c.scalars(check).one()
+            id = self.c.scalars(check).first()
             if id:
                 return id, False
 
@@ -356,6 +357,7 @@ class AccessDB:
         stmt = insert(Zones).values(
                 name = data['name'],
                 type = data['type'],
+                signed = data['signed']
             ).returning(Zones.id)                
         try:
             result = self.c.scalars(stmt).one()

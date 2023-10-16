@@ -20,6 +20,7 @@ import dns.tsigkeyring
 import dns.query
 import dns.renderer
 import dns.tsig
+import dns.dnssec
 
 
 class Authority:
@@ -40,21 +41,26 @@ class Authority:
 
     def findnode(self, qname:dns.name.Name, rdclass:str):
         name = qname.to_text()
-        zones = []
+        zones = {}
         rawzones = self.db.GetZones(name.split("."))
         if rawzones:
-            for obj in rawzones: zones.append(obj[0].name)
-            zones.sort()
-            zones.reverse()
+            for obj in rawzones: zones[obj[0].name] = obj[0].signed
+            zonelist = list(zones.keys())
+            zonelist.sort()
+            zonelist.reverse()
             for e in zones:
+                sign = zones[e]
                 if qname.is_subdomain(dns.name.from_text(e)):
                     auth, state = self.findauth(qname.to_text(),e)
                     rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
+                        '''if sign:
+                            rawkey = self.db.GetFromDomains(qname=e,rdtype='DNSKEY', zone=e)
+                            print(rawkey[0][0].data)'''
                     else: node = None
-                    return node, e, auth, state
-        return None, None, None, None
+                    return node, e, auth, state, sign
+        return None, None, None, None, None
 
     def findauth(self, name:str, zone):
         rawdata = self.db.GetFromDomains(qname=name,rdtype='NS',zone=zone, decomposition=True)
@@ -90,14 +96,25 @@ class Authority:
                 response.set_rcode(dns.rcode.NXDOMAIN)
             return response
 
-    def filling(self, data, qtype:str|list=None):
+    def filling(self, data, qtype:str|list=None, sign:bool=False):
         if isinstance(qtype,str): qtype = [qtype]
         content = []
         for a in data:
             if not qtype or a.type in qtype:
                 content.append(
                     dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
-                )                   
+                )   
+        contypes = [dns.rdatatype.to_text(a.rdtype) for a in content]
+        if sign and not 'CNAME' in contypes:
+            for a in data:
+                if a.type == 'RRSIG':
+                    if str(a.data[0]).split(' ')[0] in contypes:
+                        content.append(
+                            dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
+                        )
+        '''if a.type == 'NSEC':
+                    if set(str(a.data[0]).split(' ')).intersection(set(qtype)):
+                        print(a.type, a.data)'''              
         return content
     
     def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
@@ -135,6 +152,8 @@ class Authority:
             qname = q.question[0].name
             qtype = dns.rdatatype.to_text(q.question[0].rdtype)
             qclass = dns.rdataclass.to_text(q.question[0].rdclass)
+            if q.ednsflags == dns.flags.DO: DO = True
+            else: DO = False
             if q.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
 
@@ -144,20 +163,21 @@ class Authority:
                     return result, None, False
                 except:
                     logging.error('Sending transfer was failed', exc_info=(logging.DEBUG >= logging.root.level))
-                    return echo(data,dns.rcode.SERVFAIL)
-            node, zone, auth, state = self.findnode(qname, qclass)
+                    r = echo(data,dns.rcode.SERVFAIL)
+                    return r.to_wire(), r, True
+            node, zone, auth, state, sign = self.findnode(qname, qclass)
             if not zone: return None, None, False
             r = dns.message.make_response(q)
             if state is not None:
                 if state is True:
                     r.flags += dns.flags.AA
                     if node:
-                        r.answer = self.filling(node,[qtype, 'CNAME'])
+                        r.answer = self.filling(node,[qtype, 'CNAME'], (sign and DO))
                         if r.answer and qtype != 'CNAME':
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                                 cname = dns.name.from_text(r.answer[-1][0].to_text())
                                 crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                                cnode, zone, auth, state = self.findnode(cname, crdclass)
+                                cnode, zone, auth, state, sign = self.findnode(cname, crdclass)
                                 if cnode:
                                     if state:
                                         r.answer += self.filling(cnode, [qtype, 'CNAME'])
@@ -173,12 +193,14 @@ class Authority:
                         r = self.fakezone(q,zone)
                 if state is False and auth:
                     targets = []
-                    r.authority = self.filling(auth)                  
+                    r.authority = self.filling(auth,qtype=None)                  
                     targets = [ns for a in auth for ns in a.data]
                     if targets:
                         add = self.findadd(targets)
                         r.additional = self.filling(add)
             try:
+                if (sign and DO):
+                    r.use_edns(0,dns.flags.DO)
                 return r.to_wire(), r, True
             except dns.exception.TooBig:
                 if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
@@ -189,7 +211,8 @@ class Authority:
             
         except:
             logging.error('get data from local zones is fail', exc_info=(logging.DEBUG >= logging.root.level))
-            return echo(q,dns.rcode.SERVFAIL).to_wire(), False
+            r = echo(q,dns.rcode.SERVFAIL)
+            return r.to_wire(), r, True
 
     '''def download(self, db:AccessDB):
         # --Getting all records from cache tatble

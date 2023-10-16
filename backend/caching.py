@@ -90,8 +90,8 @@ class Caching:
             logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return P.data[2:], False
 
-    def put(self, data:bytes, response:dns.message.Message, isupload:bool=True):
-        key = parser(data)
+    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True):
+        key = parser(query)
         if not key in self.cache and self.refresh > 0:
             response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.buff[key] = self.cache[key] = data[2:]
