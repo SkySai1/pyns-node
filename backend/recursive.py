@@ -88,9 +88,9 @@ class Recursive:
             if result:
                 return result.to_wire(), result, True
             else:
-                raise Exception('empty recursion result', exc_info=(logging.DEBUG >= logging.root.level)) 
+                raise Exception('empty recursion result') 
         except:
-            logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.')
+            logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.', exc_info=(logging.DEBUG >= logging.root.level))
             result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
             return result.to_wire(), result, False
 
@@ -145,7 +145,7 @@ class Recursive:
             random.shuffle(result.additional)
             for rr in result.additional:
                 ns = str(rr[0])
-                if ipaddress.ip_address(ns).version == 4:
+                if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
                     result, _ = self.resolve(query, ns, transport)
                     if result:
                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN] 
@@ -167,7 +167,7 @@ class Recursive:
                             if nsdata.answer:
                                 for rr in nsdata.answer:
                                     ns = str(rr[0])
-                                    if ipaddress.ip_address(ns).version == 4:
+                                    if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
                                         result, ns = self.resolve(query, ns, transport)
                                     if result:
                                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN]
