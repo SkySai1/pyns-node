@@ -2,6 +2,7 @@ import asyncio
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
 import random
+import re
 from backend.accessdb import AccessDB, enginer
 from backend.functions import echo
 from backend.transfer import Transfer
@@ -96,27 +97,33 @@ class Authority:
                 response.set_rcode(dns.rcode.NXDOMAIN)
             return response
 
-    def filling(self, data, qtype:str|list=None, sign:bool=False):
+    def filling(self, data, qtype:str|list=None):
         if isinstance(qtype,str): qtype = [qtype]
         content = []
         for a in data:
             if not qtype or a.type in qtype:
                 content.append(
                     dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
-                )   
-        contypes = [dns.rdatatype.to_text(a.rdtype) for a in content]
-        if sign and not 'CNAME' in contypes:
-            for a in data:
-                if a.type == 'RRSIG':
-                    if str(a.data[0]).split(' ')[0] in contypes:
-                        content.append(
-                            dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
-                        )
-        '''if a.type == 'NSEC':
-                    if set(str(a.data[0]).split(' ')).intersection(set(qtype)):
-                        print(a.type, a.data)'''              
+                )              
         return content
     
+    def signer(self, data, zone):
+        types = {}
+        for rrset in data:
+            name = rrset.name.to_text()
+            if name not in types: types[name] = set()
+            types[name].add(dns.rdatatype.to_text(rrset.rdtype))
+        for name in list(types.keys()):
+            rawdata = self.db.GetFromDomains(name,rdtype='RRSIG',zone=zone)
+            for obj in rawdata:
+                a = obj[0]
+                rdata = str(a.data[0]).split(' ')
+                if rdata[0] in types[name]:
+                    data.append(
+                        dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
+                    )
+
+
     def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
         q = dns.message.make_query(cname,qtype,qcls)
         for i in range(3):
@@ -172,7 +179,7 @@ class Authority:
                 if state is True:
                     r.flags += dns.flags.AA
                     if node:
-                        r.answer = self.filling(node,[qtype, 'CNAME'], (sign and DO))
+                        r.answer = self.filling(node,[qtype, 'CNAME'])
                         if r.answer and qtype != 'CNAME':
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                                 cname = dns.name.from_text(r.answer[-1][0].to_text())
@@ -200,6 +207,9 @@ class Authority:
                         r.additional = self.filling(add)
             try:
                 if (sign and DO):
+                    self.signer(r.answer, zone)
+                    self.signer(r.authority, zone)
+                    self.signer(r.additional, zone)
                     r.use_edns(0,dns.flags.DO)
                 return r.to_wire(), r, True
             except dns.exception.TooBig:
