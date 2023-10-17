@@ -111,11 +111,12 @@ enable = True
 ### CACHING
 - ✅ **Put and Get mechanism.** *Done. Via class*.
 - ✅ **Sync beetwen forks.** *Done. Multiproccessing Manager.*
-- ✅ **Fast cache lookup.** *Done. set() for each fork.*
-- ✅ **Precache data from DB.** *Done.*
-- ✅ **Save flags in DB.** *Done.*
+- ✅ **Fast cache lookup.** *Done. presonally cache's dict for each fork.*
+- 🔁 ~~**Precache data from DB.** *Done.*~~
+- 🔁 ~~**Save flags in DB.** *Done.*~~
 - ✅ **Raise perfomance via C** *Done. Cython function*
-- ✅ **Cache and set() clean** *Added limit for 1st lvl cache (set) and timer to clean it*
+- ✅ **Core cache clean** *Added limit for core cache and timer to clean it*
+- ✅ **Time scale for core's cache clean** *Time between cleans will uprise depends from  CPU utilization by fork*
 - ✅ **Sync beetwen node and database** *Upload to DB, download from DB, and pops exceeded keys from local cache*
 - 🚩 **Enableable of node's cache upload** *Abilty to upload local cache to DB for this node*
 - ✅ **Separate caching responses with DO flag and without** *Done.*
@@ -129,12 +130,11 @@ enable = True
 ### AUTHORITY
 - ✅ **Keep DNS domains in DB.** *Done.*
 - ✅ **Get zones via trasnsfer.** *Done. With TSIG and without*
-- ✅ **Download domains to 2nd lvl cache** *Done.*
+- ✅ **Download domains to share cache** *Done.*
 - ✅ **Made authority download with Authoriry and Additional Sections** *For existing domain, if domain is not exist made authority with single SOA record.Done*
 - ✅ **CNAME construct via all zones** *Done.*
 - ✅ **Return zones via transfer** *Done. Need to realese download keys from DB*
 - ✅ **Return zones via transfer with TSIG** *Done. It's finily working!*
-- ✅ **CNAME maker across zones** *For A querie response with CNAME hierarchy* 
 - ✅ **CNAME recursion** *Recursion search if rdata is not exist in database*
 - ✅ **Authoirty former** *Make authoirty information for answer records*
 - 🚩 **Politics and settings for zones** *Awaitng master release* 
