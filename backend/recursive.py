@@ -14,8 +14,10 @@ import dns.rcode
 import dns.name
 import dns.flags
 import logging
+from backend.caching import Caching
 
 from backend.functions import echo
+from backend.packet import Packet
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.
@@ -62,44 +64,45 @@ class Recursive:
         try:
             self.conf = _CONF
             self.state = iscache
+            self.enable = eval(_CONF['RECURSION']['enable'])
             self.maxdepth = int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])
             self.retry = int(_CONF['RECURSION']['retry'])
             self.resolver = _CONF['RECURSION']['resolver']
+            self.iscache = eval(_CONF['CACHING']['upload'])
         except:
             logging.critical('Initialization of recursive module is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
-    def recursive(self, P):
+    def recursive(self, P:Packet, cache:Caching):
         # - External resolving if specify external DNS server
         try:
-            data = P.data
-            transport = P.transport
-            query = dns.message.from_wire(data, continue_on_error=True, ignore_trailing=True)
-            if self.resolver:
-                result = self.extresolve(query)
-                return result.to_wire(), result, True
-            # - Internal resolving if it is empty
-            random.shuffle(_ROOT)
-            global depth
-            for i in range(3):
-                self.depth = Depth()
-                result,_ = Recursive.resolve(self, query, _ROOT[i], transport)
-                if isinstance(result, dns.message.Message): break
-            if result:
-                return result.to_wire(), result, True
+            if self.enable is True:
+                query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+                if self.resolver:
+                    result = self.extresolve(query)
+                
+                # - Internal resolving if it is empty
+                else:
+                    random.shuffle(_ROOT)
+                    for i in range(3):
+                        D = Depth()
+                        result,_ = self.resolve(query, _ROOT[i], P.transport, D)
+                        if isinstance(result, dns.message.Message): break
             else:
-                raise Exception('empty recursion result') 
+                result = echo(P.data,dns.rcode.REFUSED)
         except:
             logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.', exc_info=(logging.DEBUG >= logging.root.level))
-            result = echo(data,dns.rcode.SERVFAIL,[dns.flags.RA])
-            return result.to_wire(), result, False
+            result = echo(P.data,dns.rcode.SERVFAIL,[dns.flags.RA])
+        finally:
+            if result:
+                P.transport.sendto(result.to_wire(), P.addr)
+                cache.put(P.data, result.to_wire(), result, self.iscache)
 
-    def resolve(self, query:dns.message.QueryMessage, ns, transport, depth = None):
+    def resolve(self, query:dns.message.QueryMessage, ns, transport, depth:Depth):
         # -Checking current recursion depth-
         try:
-            if depth: self.depth = depth
-            self.depth.count += 1
-            if self.depth.count >= self.maxdepth:
+            depth.count+=1
+            if depth.count >= self.maxdepth:
                 raise Exception("Reach maxdetph - %s!" % self.maxdepth)# <- Set max recursion depth
             
             if _DEBUG in [1,3]: print(f"{depth}: {ns}") # <- SOME DEBUG
@@ -123,6 +126,9 @@ class Recursive:
                 raise Exception('ID mismatch!')
             if dns.flags.TC in result.flags:
                 result = dns.query.tcp(query, ns, self.timeout)
+        except dns.exception.Timeout:
+            logging.warning(f'Query\'{query.question[0].to_text()}\' is timeout on {ns}.', exc_info=(logging.DEBUG >= logging.root.level))
+            return None, ns
         except Exception:
             logging.error(f'Query\'{query.question[0].to_text()}\' is recursion fail.', exc_info=(logging.DEBUG >= logging.root.level))
             return echo(query,dns.rcode.SERVFAIL, [dns.flags.RA]), ns
@@ -146,7 +152,7 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
-                    result, _ = self.resolve(query, ns, transport)
+                    result, _ = self.resolve(query, ns, transport, depth)
                     if result:
                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN] 
                         or dns.flags.AA in result.flags):
@@ -159,7 +165,7 @@ class Recursive:
                     qname = dns.name.from_text(str(rr))
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
-                        nsdata, _ = self.resolve(nsquery, ns, transport)
+                        nsdata, _ = self.resolve(nsquery, ns, transport, depth)
                         if nsdata:
                             if not nsdata.rcode() in [
                             dns.rcode.NOERROR, dns.rcode.REFUSED]:
@@ -168,7 +174,7 @@ class Recursive:
                                 for rr in nsdata.answer:
                                     ns = str(rr[0])
                                     if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
-                                        result, ns = self.resolve(query, ns, transport)
+                                        result, ns = self.resolve(query, ns, transport, depth)
                                     if result:
                                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN]
                                            or dns.flags.AA in result.flags): 

@@ -27,12 +27,12 @@ import dns.dnssec
 class Authority:
     db = None
 
-    def __init__(self, conf, _rec:Recursive, auth:DictProxy, zones:ListProxy):
+    def __init__(self, _CONF, _rec:Recursive, auth:DictProxy, zones:ListProxy):
         try:
-            self.conf = conf
             self.recursive = _rec
             self.auth = auth
             self.zones = zones
+            self.recenable = eval(_CONF['RECURSION']['enable'])
         except:
             logging.critical('initialization of authority module is fail', exc_info=(logging.DEBUG >= logging.root.level))
     
@@ -126,15 +126,16 @@ class Authority:
 
     def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
         q = dns.message.make_query(cname,qtype,qcls)
-        for i in range(3):
-            try:
-                depth = Depth()
-                ns = random.choice(_ROOT)
-                r, _ = self.recursive.resolve(q, ns, transport, depth)
-                if r:
-                    return r.answer
-            except:
-                i+=1
+        if self.recenable is True:
+            for i in range(3):
+                try:
+                    depth = Depth()
+                    ns = random.choice(_ROOT)
+                    r, _ = self.recursive.resolve(q, ns, transport, depth)
+                    if r:
+                        return r.answer
+                except:
+                    i+=1
         return []
 
     def get(self, P:Packet):
@@ -144,7 +145,7 @@ class Authority:
             transport = P.transport
             isrec = True
             keyring = None
-            for i in range(2):
+            for i in range(3):
                 try:
                     if i > 1:
                         r = echo(data,dns.rcode.REFUSED)
@@ -155,7 +156,6 @@ class Authority:
                     name = dns.name.from_wire(data,12)[0]
                     keyring = dns.tsigkeyring.from_text(self.db.GetTsig(name.to_text()))
                     continue
-
             qname = q.question[0].name
             qtype = dns.rdatatype.to_text(q.question[0].rdtype)
             qclass = dns.rdataclass.to_text(q.question[0].rdclass)
@@ -184,7 +184,7 @@ class Authority:
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                                 cname = dns.name.from_text(r.answer[-1][0].to_text())
                                 crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                                cnode, zone, auth, state, sign = self.findnode(cname, crdclass)
+                                cnode, zone, auth, state, _ = self.findnode(cname, crdclass)
                                 if cnode:
                                     if state:
                                         r.answer += self.filling(cnode, [qtype, 'CNAME'])

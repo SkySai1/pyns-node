@@ -10,7 +10,6 @@ from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Floa
 from sqlalchemy.orm import declarative_base, Session, relationship
 from backend.functions import getnow, ThisNode
 from backend.rulesmaker import makerules
-from backend.recursive import QTYPE, CLASS
 
 # --- DB structure
 Base = declarative_base()

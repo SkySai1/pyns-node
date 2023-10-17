@@ -52,7 +52,7 @@ def warden(data, addr, transport) -> Packet:
 
 
 
-def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:bytes, addr:tuple, transport):
+def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:tuple, transport):
     try:
         P = warden(data, addr, transport)
 
@@ -91,12 +91,10 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, rec:bool, data:by
                     threading.Thread(target=cache.put, args=(data, result, response, False)).start()
                 return result
 
-        if rec is True and P.check.recursive():
-            result, response, iscache = recursive.recursive(P)
+        if P.check.recursive():
+            threading.Thread(target=recursive.recursive, args=(P, cache)).start()
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
-            if iscache is True:
-                threading.Thread(target=cache.put, args=(data, result, response, iscache)).start()
-            return result
+            return None
         else:
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
@@ -112,7 +110,6 @@ class UDPserver(asyncio.DatagramProtocol):
         self.recursive = _recursive
         self.cache = _cache
         self.stat = stat
-        self.rec = eval(CONF['RECURSION']['enable']) 
         super().__init__()
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
@@ -123,16 +120,19 @@ class UDPserver(asyncio.DatagramProtocol):
         if self.stat is True:
             global _COUNT
             _COUNT += 1
-        result = handle(self.auth, self.recursive, self.cache, self.rec, data, addr, self.transport)
+        result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport)
         
         # -- INFO LOGGING BLOCK START --
         if logging.INFO >= logging.root.level and not logging.root.disabled:
             qid = int.from_bytes(data[:2],'big')
-            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
+            if isinstance(result, dns.message.Message): rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
+            else: rcode = 'UNKOWN'
             logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
         # -- INFO LOGGING BLOCK END --
 
-        self.transport.sendto(result, addr)
+
+        if result:
+            self.transport.sendto(result, addr)
 
 # -- TCP socket --
 class TCPServer(asyncio.Protocol):
@@ -142,7 +142,6 @@ class TCPServer(asyncio.Protocol):
         self.recursive = _recursive
         self.cache = _cache
         self.stat = stat
-        self.rec = eval(CONF['RECURSION']['enable']) 
         super().__init__()    
     
 
@@ -154,7 +153,7 @@ class TCPServer(asyncio.Protocol):
             global _COUNT
             _COUNT += 1
         addr = self.transport.get_extra_info('peername')
-        result = handle(self.auth, self.recursive, self.cache, self.rec, data[2:], addr, self.transport)
+        result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport)
         l = result.__len__().to_bytes(2,'big')
 
         # -- INFO LOGGING BLOCK START --
