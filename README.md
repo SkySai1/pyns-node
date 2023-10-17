@@ -118,6 +118,7 @@ enable = True
 - ✅ **Cache and set() clean** *Added limit for 1st lvl cache (set) and timer to clean it*
 - ✅ **Sync beetwen node and database** *Upload to DB, download from DB, and pops exceeded keys from local cache*
 - 🚩 **Enableable of node's cache upload** *Abilty to upload local cache to DB for this node*
+- ✅ **Separate caching responses with DO flag and without** *Done.*
 
 ### RECURSION
 - ✅ **Recursion mechanism.** *Done.*
@@ -139,6 +140,7 @@ enable = True
 - 🚩 **Politics and settings for zones** *Awaitng master release* 
 - ✅ **TSIG keeping with zones binding** *Awaitng master release*
 - 🚩 **Retransfer and zone purging** *Awaitng master release*
+- ✅ **Zone signing via DNSSEC** *Done. With key generate*
 
 
 ### DATABASE
