@@ -150,22 +150,23 @@ class Authority:
                     if i > 1:
                         r = echo(data,dns.rcode.REFUSED)
                         return r.to_wire(), r, True
-                    q = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
+                    
+                    P.query = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
                     break
                 except dns.message.UnknownTSIGKey:
                     name = dns.name.from_wire(data,12)[0]
                     keyring = dns.tsigkeyring.from_text(self.db.GetTsig(name.to_text()))
                     continue
-            qname = q.question[0].name
-            qtype = dns.rdatatype.to_text(q.question[0].rdtype)
-            qclass = dns.rdataclass.to_text(q.question[0].rdclass)
-            if q.ednsflags == dns.flags.DO: DO = True
+            qname = P.query.question[0].name
+            qtype = dns.rdatatype.to_text(P.query.question[0].rdtype)
+            qclass = dns.rdataclass.to_text(P.query.question[0].rdclass)
+            if P.query.ednsflags == dns.flags.DO: DO = True
             else: DO = False
-            if q.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
+            if P.query.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
 
-                    T = Transfer(self.conf, qname, addr, keyring, q.keyname, q.keyalgorithm)
-                    result = T.sendaxfr(q,transport)
+                    T = Transfer(self.conf, qname, addr, keyring, P.query.keyname, P.query.keyalgorithm)
+                    result = T.sendaxfr(P.query,transport)
                     if not result: raise Exception()
                     return result, None, False
                 except:
@@ -174,7 +175,7 @@ class Authority:
                     return r.to_wire(), r, True
             node, zone, auth, state, sign = self.findnode(qname, qclass)
             if not zone: return None, None, False
-            r = dns.message.make_response(q)
+            r = dns.message.make_response(P.query)
             if state is not None:
                 if state is True:
                     r.flags += dns.flags.AA
@@ -197,7 +198,7 @@ class Authority:
                                     break
                     if not r.answer and not r.authority:
                         r.set_rcode(dns.rcode.NXDOMAIN)
-                        r = self.fakezone(q,zone)
+                        r = self.fakezone(P.query,zone)
                 if state is False and auth:
                     targets = []
                     r.authority = self.filling(auth,qtype=None)                  
@@ -221,7 +222,7 @@ class Authority:
             
         except:
             logging.error('get data from local zones is fail', exc_info=(logging.DEBUG >= logging.root.level))
-            r = echo(q,dns.rcode.SERVFAIL)
+            r = echo(P.query,dns.rcode.SERVFAIL)
             return r.to_wire(), r, True
 
     '''def download(self, db:AccessDB):

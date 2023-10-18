@@ -1,3 +1,7 @@
+import asyncio
+import struct
+
+
 class Access:
     query = False
     cache = False
@@ -6,6 +10,7 @@ class Access:
 
 
 class Packet:
+    query = None
 
     def __init__(self, data:bytes, addr:tuple, transport) -> None:
         self.access = access = Access()
@@ -27,6 +32,13 @@ class Packet:
         if as_text:
             perms = ", ".join([f"{str(p).upper()} is {str(perms[p])}" for p in perms])
         return perms
+    
+    def response(self, data:bytes):
+        if isinstance(self.transport, asyncio.selector_events._SelectorSocketTransport):
+            l = struct.pack('>H',len(data))
+            self.transport.write(l+data)
+        else:
+            self.transport.sendto(data, self.addr)
 
     class Allow:
 

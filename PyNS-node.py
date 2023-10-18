@@ -74,7 +74,8 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
 
         if P.check.query() is False:
             if debug: logging.debug(f"Query({qid}) from {addr} is not Allowed. REFUSED.")
-            return P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
+            result = P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
+            return result
      
 
         if P.check.cache():
@@ -114,7 +115,6 @@ class UDPserver(asyncio.DatagramProtocol):
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
         self.transport = transport
-        #print(s.type, type(s.type))
 
     def datagram_received(self, data, addr):
         if self.stat is True:
@@ -154,7 +154,7 @@ class TCPServer(asyncio.Protocol):
             _COUNT += 1
         addr = self.transport.get_extra_info('peername')
         result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport)
-        l = result.__len__().to_bytes(2,'big')
+        
 
         # -- INFO LOGGING BLOCK START --
         if logging.INFO >= logging.root.level and not logging.root.disabled:
@@ -162,8 +162,11 @@ class TCPServer(asyncio.Protocol):
             rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
             logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
         # -- INFO LOGGING BLOCK END --
-
-        self.transport.write(l+result)
+        
+        if result:
+            l = struct.pack('>H',len(result))
+            self.transport.write(l+result)
+        
 
 
 def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, isudp:bool=True,):

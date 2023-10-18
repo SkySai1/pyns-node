@@ -77,16 +77,17 @@ class Recursive:
         # - External resolving if specify external DNS server
         try:
             if self.enable is True:
-                query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+                if not P.query: 
+                    P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
                 if self.resolver:
-                    result = self.extresolve(query)
+                    result = self.extresolve(P.query)
                 
                 # - Internal resolving if it is empty
                 else:
                     random.shuffle(_ROOT)
                     for i in range(3):
                         D = Depth()
-                        result,_ = self.resolve(query, _ROOT[i], P.transport, D)
+                        result,_ = self.resolve(P.query, _ROOT[i], P.transport, D)
                         if isinstance(result, dns.message.Message): break
             else:
                 result = echo(P.data,dns.rcode.REFUSED)
@@ -95,7 +96,8 @@ class Recursive:
             result = echo(P.data,dns.rcode.SERVFAIL,[dns.flags.RA])
         finally:
             if result:
-                P.transport.sendto(result.to_wire(), P.addr)
+                P.response(result.to_wire())
+                #P.transport.sendto(result.to_wire(), P.addr)
                 cache.put(P.data, result.to_wire(), result, self.iscache)
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport, depth:Depth):
