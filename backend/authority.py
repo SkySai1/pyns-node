@@ -29,6 +29,7 @@ class Authority:
 
     def __init__(self, _CONF, _rec:Recursive, auth:DictProxy, zones:ListProxy):
         try:
+            self.CONF = _CONF
             self.recursive = _rec
             self.auth = auth
             self.zones = zones
@@ -164,10 +165,8 @@ class Authority:
             else: DO = False
             if P.query.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
-
-                    T = Transfer(self.conf, qname, addr, keyring, P.query.keyname, P.query.keyalgorithm)
+                    T = Transfer(self.CONF, qname, addr, keyring, P.query.keyname, P.query.keyalgorithm)
                     result = T.sendaxfr(P.query,transport)
-                    if not result: raise Exception()
                     return result, None, False
                 except:
                     logging.error('Sending transfer was failed', exc_info=(logging.DEBUG >= logging.root.level))

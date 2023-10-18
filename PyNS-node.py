@@ -89,10 +89,11 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
             if result:
                 if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
                 if iscache is True:
-                    threading.Thread(target=cache.put, args=(data, result, response, False)).start()
+                    threading.Thread(target=cache.put, args=(data, result, response, False, True)).start()
                 return result
 
         if P.check.recursive():
+            #recursive.recursive(P,cache)
             threading.Thread(target=recursive.recursive, args=(P, cache)).start()
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             return None

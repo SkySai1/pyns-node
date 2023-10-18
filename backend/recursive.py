@@ -34,6 +34,34 @@ _ROOT = [
     "199.7.83.42",          #l.root-servers.net.
     "202.12.27.33"          #m.root-servers.net.
 ]
+_RU = [
+    "193.232.128.6",        #a.dns.ripn.net.
+    "194.85.252.62",        #b.dns.ripn.net.
+    "194.190.124.17",       #d.dns.ripn.net.
+    "193.232.142.17",       #e.dns.ripn.net.
+    "193.232.156.17",       #f.dns.ripn.net.
+]
+
+_COM = [
+    "192.5.6.30",           #a.gtld-servers.net
+    "192.33.14.30",         #b.gtld-servers.net
+    "192.26.92.30",         #c.gtld-servers.net
+    "192.31.80.30",         #d.gtld-servers.net
+    "192.12.94.30",         #e.gtld-servers.net
+    "192.35.51.30",         #f.gtld-servers.net
+    "192.42.93.30",         #g.gtld-servers.net
+    "192.54.112.30",        #h.gtld-servers.net
+    "192.43.172.30",        #i.gtld-servers.net
+    "192.48.79.30",         #j.gtld-servers.net
+    "192.52.178.30",        #k.gtld-servers.net
+    "192.41.162.30",        #l.gtld-servers.net
+    "192.55.83.30",         #m.gtld-servers.net
+]
+
+TLD = {
+    b'com': _COM,
+    b'ru': _RU
+}
 
 _DEBUG = 0
 
@@ -84,11 +112,14 @@ class Recursive:
                 
                 # - Internal resolving if it is empty
                 else:
-                    random.shuffle(_ROOT)
+                    NS = TLD.get(P.query.question[0].name[1])
+                    if not NS: NS = _ROOT
+                    random.shuffle(NS)
                     for i in range(3):
                         D = Depth()
-                        result,_ = self.resolve(P.query, _ROOT[i], P.transport, D)
+                        result,_ = self.resolve(P.query, NS[i], P.transport, D)
                         if isinstance(result, dns.message.Message): break
+                        if i >=1: NS = random.choice(_ROOT)
             else:
                 result = echo(P.data,dns.rcode.REFUSED)
         except:
@@ -97,7 +128,6 @@ class Recursive:
         finally:
             if result:
                 P.response(result.to_wire())
-                #P.transport.sendto(result.to_wire(), P.addr)
                 cache.put(P.data, result.to_wire(), result, self.iscache)
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport, depth:Depth):

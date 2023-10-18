@@ -90,12 +90,16 @@ class Caching:
             logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return P.data[2:], False
 
-    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True):
+    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isuath:bool=False):
         key = parser(query)
         if not key in self.cache and self.refresh > 0:
-            response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
+            if isuath:
+                response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD + dns.flags.AA)
+            else:
+                response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.buff[key] = self.cache[key] = data[2:]
             if isupload and response.answer:
+                print(response)
                 self.temp.append(response)
 
     def packing(self, rawdata, P:Packet, q:dns.message.Message):
@@ -141,7 +145,7 @@ class Caching:
         try:
 
             # -- DEBUG LOGGING BLOCK START --
-            if self.cache and logging.DEBUG >= logging.root.level and not logging.root.disabled:
+            if self.temp and logging.DEBUG >= logging.root.level and not logging.root.disabled:
                 emptyid = int.to_bytes(0,2,'big')
                 queries = []
                 for data in self.cache.values():
@@ -149,6 +153,7 @@ class Caching:
                     queries.append(f"'{q.question[0].to_text()}'")                   
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --
+
             [self.cache.pop(e) for e in self.cache.keys()]
             db.CacheExpired(expired=getnow(self.timedelta, 0))
             if eval(self.conf['CACHING']['upload']) is True:           
