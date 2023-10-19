@@ -76,9 +76,9 @@ def checkconf(CONF:configparser.ConfigParser):
         for opt in CONF.items('ACCESS'):
             try:
                 ipaddress.ip_network(opt[0])
-                if len(opt[1]) > 4: raise Exception
+                if len(opt[1]) > 5: raise Exception
                 for r in set(opt[1]):
-                    if r not in ['Q','C','A','R']: raise Exception
+                    if r not in ['Q','C','A','R', '+']: raise Exception
                     #if not re.match('^[q|c|a|r][+|-]$', r): raise Exception
             except:
                 msg.append(f"ACCESS: {opt[0]} = {opt[1]} <- bad statetement")
@@ -187,6 +187,7 @@ def deafultconf():
         ";\t'C' - allow query processing by CACHE module (affect on return response from cache)":None,
         ";\t'A' - allow query processing by AUTHORITY module (affect on return response from own zones data)":None,
         ";\t'R' - allow query processing by RECURSIVE module (affect on return response from own zones data)":None,
+        ";\t'+' - allow techincal command":None,        
         ";At default all rules for any network set to Deny":None,
         ";If you need to deny all queries from some network just do not specified any 'Rule' (empty argument)":None,
         ";Examples:":None,
@@ -194,7 +195,7 @@ def deafultconf():
         ";127.0.0.1/32 = ":None,
         ";This means that queries from any networks will be deny except from 127.0.0.0/8 network":None,
         ";but queries from 127.0.0.1 address's will be also deny":None,
-        '127.0.0.0/8': 'QCAR',      
+        '127.0.0.0/8': 'QCAR+',      
     }
     return config
 

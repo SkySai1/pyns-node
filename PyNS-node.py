@@ -261,9 +261,9 @@ def start(CONF):
     networks.reverse()
     for opt in networks:
             cidr = CIDR(opt[0])
-            args = set(opt[1])
+            args = set(opt[1]) - {'+'}
             Rule = Rules(cidr, *args)
-            rules[Rule.addr] = Rule.access.__dict__              
+            rules[Rule.addr] = Rule.access.__dict__             
     try: 
         with Manager() as manager:
             # -Init Classes
@@ -299,7 +299,7 @@ def start(CONF):
                 except:
                     logging.critical(f'Fail with up {name}', exc_info=(logging.DEBUG >= logging.root.level))
             # -Start background worker
-            p = Process(target=helper.watcher, name='Watcher')
+            p = Process(target=helper.run, name='Helper')
             p.start()
             Stream.append(p)
             # -Counter-

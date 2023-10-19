@@ -41,7 +41,7 @@ class Authority:
 
 
     def findnode(self, qname:dns.name.Name, rdclass:str):
-        name = qname.to_text()
+        name = qname.to_text().lower()
         zones = {}
         rawzones = self.db.GetZones(name.split("."))
         if rawzones:
@@ -51,8 +51,8 @@ class Authority:
             zonelist.reverse()
             for e in zones:
                 sign = zones[e]
-                if qname.is_subdomain(dns.name.from_text(e)):
-                    auth, state = self.findauth(qname.to_text(),e)
+                if e in name:
+                    auth, state = self.findauth(name,e)
                     rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
@@ -94,13 +94,14 @@ class Authority:
                 response.set_rcode(dns.rcode.NXDOMAIN)
             return response
 
-    def filling(self, data, qtype:str|list=None):
+    def filling(self, data, qname:dns.name.Name=None, qtype:str|list=None):
         if isinstance(qtype,str): qtype = [qtype]
         content = []
         for a in data:
             if not qtype or a.type in qtype:
+                if not qname: qname = dns.name.from_text(a.name)
                 content.append(
-                    dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
+                    dns.rrset.from_text_list(qname, a.ttl, a.cls, a.type, a.data)
                 )              
         return content
     
@@ -175,7 +176,7 @@ class Authority:
                 if state is True:
                     r.flags += dns.flags.AA
                     if node:
-                        r.answer = self.filling(node,[qtype, 'CNAME'])
+                        r.answer = self.filling(node, qname, [qtype, 'CNAME'])
                         if r.answer and qtype != 'CNAME':
                             while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                                 cname = dns.name.from_text(r.answer[-1][0].to_text())
@@ -183,7 +184,7 @@ class Authority:
                                 cnode, zone, auth, state, _ = self.findnode(cname, crdclass)
                                 if cnode:
                                     if state:
-                                        r.answer += self.filling(cnode, [qtype, 'CNAME'])
+                                        r.answer += self.filling(cnode, cname, [qtype, 'CNAME'])
                                     else:
                                         break
                                 elif isrec:

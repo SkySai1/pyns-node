@@ -3,7 +3,10 @@ from logging.handlers import DEFAULT_UDP_LOGGING_PORT
 import threading
 import time
 import logging
-from multiprocessing import Pipe
+from os import kill
+import signal
+import psutil
+from multiprocessing import Pipe, parent_process
 from backend.accessdb import AccessDB, enginer
 from backend.caching import Caching
 from backend.authority import Authority
@@ -24,13 +27,17 @@ class Helper:
     def connect(self, engine):
         self.db = AccessDB(engine, self.conf)
 
-    def watcher(self):
+    def run(self):
         try:
+            p = psutil.Process()
+            for child in p.parent().children(True):
+                #child.kill()
+                pass
+
             Stream = []
             Stream.append(threading.Thread(target=Helper.dbwork, args=(self,),name='DatabaseWorker'))
             if self.logkeep in ["db", "both"]:
                 Stream.append(threading.Thread(target=Helper.logchannel, args=(self,),name='LogChannel'))
-
             for t in Stream:
                 t.start()
             for t in Stream:
