@@ -107,6 +107,7 @@ enable = True
 - ✅ **Logging mechanism** *Done.*
 - 🚩 **Expand settings and politics** *Awaitng master release*
 - ✅ **Debug mode** *Done. As part of logging*
+- ✅ **White and Black Lists** *Done. Via ACCESS in config*
 
 ### CACHING
 - ✅ **Put and Get mechanism.** *Done. Via class*.

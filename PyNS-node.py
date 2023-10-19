@@ -20,7 +20,7 @@ from backend.accessdb import AccessDB, enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
-from backend.objects import Packet
+from backend.objects import Packet, Rules
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
@@ -30,12 +30,16 @@ from backend.objects import ThisNode
 
 _COUNT = 0
 
-def warden(data, addr, transport) -> Packet:
+def warden(data, addr, transport, rules:dict) -> Packet:
     P = Packet(data,addr, transport)
-    P.allow.query()
+    for network in set(rules.keys()):
+        if P.ip in network: 
+            P.access.__dict__ = rules[network]
+    '''P.allow.query()
     P.allow.cache()
     P.allow.authority()
-    P.allow.recursive()
+    P.allow.recursive()'''
+    #print(P.access.__dict__)
 
     # -- INFO LOGGING BLOCK START --
     if logging.INFO >= logging.root.level and not logging.root.disabled:
@@ -52,10 +56,9 @@ def warden(data, addr, transport) -> Packet:
 
 
 
-def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:tuple, transport):
+def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:tuple, transport, rules):
     try:
-        P = warden(data, addr, transport)
-
+        P = warden(data, addr, transport, rules)
         # -- DEBUG LOGGING BLOCK START --
         if logging.DEBUG >= logging.root.level and not logging.root.disabled:
             debug = True
@@ -107,11 +110,12 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
 # --- UDP socket ---
 class UDPserver(asyncio.DatagramProtocol):
 
-    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, stat:bool=False) -> None:
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, rules, stat:bool=False) -> None:
         self.auth = _auth
         self.recursive = _recursive
         self.cache = _cache
         self.stat = stat
+        self.rules = rules
         super().__init__()
 
     def connection_made(self, transport:asyncio.DatagramTransport,):
@@ -121,7 +125,7 @@ class UDPserver(asyncio.DatagramProtocol):
         if self.stat is True:
             global _COUNT
             _COUNT += 1
-        result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport)
+        result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport, self.rules)
         
         # -- INFO LOGGING BLOCK START --
         if logging.INFO >= logging.root.level and not logging.root.disabled:
@@ -138,7 +142,7 @@ class UDPserver(asyncio.DatagramProtocol):
 # -- TCP socket --
 class TCPServer(asyncio.Protocol):
 
-    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, stat:bool=False) -> None:
+    def __init__(self, _auth:Authority, _recursive:Recursive, _cache:Caching, CONF, rules, stat:bool=False) -> None:
         self.auth = _auth
         self.recursive = _recursive
         self.cache = _cache
@@ -170,14 +174,14 @@ class TCPServer(asyncio.Protocol):
         
 
 
-def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, isudp:bool=True,):
+def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, rules, isudp:bool=True,):
     loop = asyncio.new_event_loop()
     if isudp is True:
         addr = (ip, port)
-        listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, CONF, stat), addr, reuse_port=True)
+        listen = loop.create_datagram_endpoint(lambda: UDPserver(_auth, _recursive, _cache, CONF, rules, stat), addr, reuse_port=True)
         transport, protocol = loop.run_until_complete(listen)
     else:
-        listen = loop.create_server(lambda: TCPServer(_auth, _recursive, _cache, CONF, stat),ip,port,reuse_port=True)
+        listen = loop.create_server(lambda: TCPServer(_auth, _recursive, _cache, CONF, rules, stat),ip,port,reuse_port=True)
         transport = loop.run_until_complete(listen)
     try:
         logging.info(f'Started listen at {ip, port}')
@@ -192,7 +196,7 @@ def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, st
         sys.exit(1)
 
 
-def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:Recursive):
+def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:Recursive, rules):
     engine = enginer(CONF)
     db = AccessDB(engine, CONF)
 
@@ -214,8 +218,8 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
         port = int(CONF['GENERAL']['listen-port'])
         l = []
         if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF,True)).start()
-            threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF,False)).start()
+            threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, True)).start()
+            threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, False)).start()
             threading.Thread(target=_cache.debuff, daemon=True).start()
             print(f"Core {current_process().name} Start listen to: {ip, port}")
         else:
@@ -255,7 +259,13 @@ def counter(pipe, output:bool = False):
 def start(CONF):
     ThisNode.name = CONF['DATABASE']['node']
     logreciever = logsetup(CONF, __name__)
-    logging.debug('PyNS IS STARTED!')
+    rules = {}
+    for opt in CONF.items('ACCESS'):
+            ip = ipaddress.ip_network(opt[0])
+            args = opt[1].split(' ')
+            Rule = Rules(ip, *args)
+            rules[Rule.addr] = Rule.access.__dict__              
+
     try: 
         with Manager() as manager:
             # -Init Classes
@@ -283,7 +293,7 @@ def start(CONF):
                 try:
                     gather, stat = Pipe()
                     name = f'Listener#{i}'
-                    p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive), name=name)
+                    p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive, rules), name=name)
                     p.start()
                     logging.debug(f'New Listener ({name}) was started successful')
                     Stream.append(p)
@@ -322,8 +332,8 @@ if __name__ == "__main__":
             CONF, state = getconf(thisdir+'/config.ini')
         if state is False:
             raise Exception()
-    except:
-        logging.critical('Error with manual start', exc_info=(logging.DEBUG >= logging.root.level))
+    except Exception as e:
+        logging.critical(f'Error with manual start - {e}')
         sys.exit(1)
     start(CONF)
 
