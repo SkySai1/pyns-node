@@ -7,7 +7,7 @@ from multiprocessing import Pipe
 from backend.accessdb import AccessDB, enginer
 from backend.caching import Caching
 from backend.authority import Authority
-from backend.functions import ThisNode
+from backend.objects import ThisNode
 from backend.logger import LogServer
 
 class Helper:

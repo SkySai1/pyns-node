@@ -8,8 +8,9 @@ import dns.rdataclass
 import dns.rdatatype
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, exc, create_engine, delete, insert, select, or_, not_, update
 from sqlalchemy.orm import declarative_base, Session, relationship
-from backend.functions import getnow, ThisNode
+from backend.functions import getnow
 from backend.rulesmaker import makerules
+from backend.objects import ThisNode
 
 # --- DB structure
 Base = declarative_base()

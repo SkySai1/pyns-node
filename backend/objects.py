@@ -2,6 +2,11 @@ import asyncio
 import struct
 
 
+
+class ThisNode:
+    id = None
+    name = None
+
 class Access:
     query = False
     cache = False

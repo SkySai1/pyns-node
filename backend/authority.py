@@ -7,7 +7,7 @@ from backend.accessdb import AccessDB, enginer
 from backend.functions import echo
 from backend.transfer import Transfer
 from backend.recursive import Recursive, Depth, _ROOT
-from backend.packet import Packet
+from backend.objects import Packet
 import time
 import dns.message
 import dns.rrset
@@ -57,9 +57,6 @@ class Authority:
                     rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
                     if rawdata:
                         node = [obj[0] for obj in rawdata]
-                        '''if sign:
-                            rawkey = self.db.GetFromDomains(qname=e,rdtype='DNSKEY', zone=e)
-                            print(rawkey[0][0].data)'''
                     else: node = None
                     return node, e, auth, state, sign
         return None, None, None, None, None

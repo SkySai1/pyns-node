@@ -15,7 +15,7 @@ import dns.flags
 import sys
 from backend.accessdb import AccessDB
 from backend.functions import getnow
-from backend.packet import Packet
+from backend.objects import Packet
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
@@ -99,7 +99,6 @@ class Caching:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
             self.buff[key] = self.cache[key] = data[2:]
             if isupload and response.answer:
-                print(response)
                 self.temp.append(response)
 
     def packing(self, rawdata, P:Packet, q:dns.message.Message):

@@ -11,7 +11,8 @@ from logging import LogRecord, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler, DatagramHandler, DEFAULT_UDP_LOGGING_PORT
 import time
 from typing import Any
-from backend.functions import ThisNode, getnow
+from backend.functions import getnow
+from backend.objects import ThisNode
 from threading import Thread
 
 def logserver():

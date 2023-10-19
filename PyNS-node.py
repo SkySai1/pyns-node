@@ -20,12 +20,12 @@ from backend.accessdb import AccessDB, enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
-from backend.packet import Packet
+from backend.objects import Packet
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
 from backend.logger import LogServer, logsetup
-from backend.functions import ThisNode
+from backend.objects import ThisNode
 
 
 _COUNT = 0

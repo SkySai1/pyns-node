@@ -30,7 +30,3 @@ def getnow(delta, rise):
         return now + datetime.timedelta(0,rise) 
     except:
         logging.error('Making date is fail', exc_info=(logging.DEBUG >= logging.root.level))
-
-class ThisNode:
-    id = None
-    name = None

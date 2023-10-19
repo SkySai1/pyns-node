@@ -17,7 +17,7 @@ import logging
 from backend.caching import Caching
 
 from backend.functions import echo
-from backend.packet import Packet
+from backend.objects import Packet
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.

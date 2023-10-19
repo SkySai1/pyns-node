@@ -8,12 +8,13 @@ import os, platform
 import ipaddress
 
 _OPTIONS ={
-    'GENERAL': ['listen-ip', 'listen-port', 'printstats', 'timedelta'],
+    'GENERAL': ['mode','listen-ip', 'listen-port', 'printstats', 'timedelta'],
+    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
     'AUTHORITY': [],
     'CACHING': ['expire', 'scale', 'size', 'download', 'upload'],
     'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
-    'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
-    'LOGGING' : ['enable', 'keeping', 'pathway' , 'level', 'separate', 'maxsize','rotation']
+    'LOGGING' : ['enable', 'keeping', 'pathway' , 'level', 'separate', 'maxsize','rotation'],
+    'ACCESS': [],
 }
 
 def getconf(path):
@@ -39,6 +40,7 @@ def checkconf(CONF:configparser.ConfigParser):
         for s in CONF:
             for opt in CONF.items(s):
                 try:
+                    if opt[0] == 'mode' and opt[1] not in ['unit', 'alone', 'proxy']: raise Exception                    
                     if opt[0] == 'listen-ip': ipaddress.ip_address(opt[1]).version == 4
                     if opt[0] == 'listen-port': int(opt[1])
                     if opt[0] == 'printstats': eval(opt[1])
@@ -51,8 +53,13 @@ def checkconf(CONF:configparser.ConfigParser):
                     if opt[0] == 'timeout': float(opt[1])
                     if opt[0] == 'retry': int(opt[1])
                     if opt[0] == 'timesync': float(opt[1])
-                    if opt[0] == 'keeping':
-                        if opt[1] not in ['db', 'file', 'both']: raise Exception
+                    if opt[0] == 'keeping'and opt[1] not in ['db', 'file', 'both']: raise Exception          
+                    if opt[0] == 'level' and opt[1] not in ['debug', 'info', 'warning', 'error', 'critical']: raise Exception
+                    if opt[0] == 'maxsize' and not re.match('^[0-9]*[b|k|m|g]$', opt[1].lower()):raise Exception
+                    if opt[0] == 'rotation': int(opt[1])
+                    if opt[0] == 'download': eval(opt[1])
+                    if opt[0] == 'upload': eval(opt[1])
+
                     if opt[0] == 'pathway':   
                         if not os.path.exists(opt[1]):
                             try:
@@ -61,16 +68,19 @@ def checkconf(CONF:configparser.ConfigParser):
                                 msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir do not exist")
                         elif not os.access(opt[1], os.R_OK):
                             msg.append(f"{s}: {opt[0]} = {opt[1]} <- dir without read access ")
-                    if opt[0] == 'level':
-                        if opt[1] not in ['debug', 'info', 'warning', 'error', 'critical']: raise Exception
-                    if opt[0] == 'maxsize':
-                        if not re.match('^[0-9]*[b|k|m|g]$', opt[1].lower()):raise Exception
-                    if opt[0] == 'rotation': int(opt[1])
-                    if opt[0] == 'download': eval(opt[1])
-                    if opt[0] == 'upload': eval(opt[1])
+                    
+
                 except:
                     msg.append(f"{s}: {opt[0]} = {opt[1]} <- bad statetement")
                     continue
+        for opt in CONF.items('ACCESS'):
+            try:
+                ipaddress.ip_network(opt[0])
+                for r in opt[1].split(' '):
+                    if not re.match('^[q|c|a|r][+|-]$', r): raise Exception
+            except:
+                msg.append(f"ACCESS: {opt[0]} = {opt[1]} <- bad statetement")
+                continue                
         if not msg: 
             return True
         else:
@@ -101,6 +111,11 @@ def deafultconf():
     DBPass = str(input('Input PASSWORD of your Data Base\'s user:\n'))
     DBName = str(input('Input BASENAME of your Data Base\n'))
     config['GENERAL'] = {
+        ";Possible modes (only work is unit)":None,
+        "; 'unit' - as part of PyNS system with database interaction":None,
+        "; 'alone' - independent DNS server with load zones from files":None,
+        "; 'proxy' - forward all queries (include AXFR) to another DNS server and back":None,
+        'mode': 'unit',
         'listen-ip': '127.0.0.2',
         'listen-port': 53,
         ";Print statistic in console": None,
@@ -108,6 +123,19 @@ def deafultconf():
         ";For mysql better keep timedelta as 0, for pgsql as your region timezone": None,
         'timedelta': 3
     }
+
+    config['DATABASE'] = {
+        'dbuser': DBUser,
+        'dbpass': DBPass,
+        'dbhost': DBHost,
+        'dbport': 5432,
+        'dbname': DBName,
+        ";Time to sync with Data Base":None,
+        'timesync': 5,
+        ";To identify themselves in DB":None,
+        'node': hostname,
+    }
+
     config['AUTHORITY'] = {
 
     }
@@ -131,17 +159,6 @@ def deafultconf():
         'timeout': 0.5,
         'retry': 1
     }
-    config['DATABASE'] = {
-        'dbuser': DBUser,
-        'dbpass': DBPass,
-        'dbhost': DBHost,
-        'dbport': 5432,
-        'dbname': DBName,
-        ";Time to sync with Data Base":None,
-        'timesync': 5,
-        ";To identify themselves in DB":None,
-        'node': hostname,
-    }
     config['LOGGING'] = {
         ";Enable logging = False|True": None,
         'enable': True, 
@@ -158,6 +175,24 @@ def deafultconf():
         'maxsize': '1M',
         ";Rotation, number of backup copies after reach maxsize = 5":None,
         'rotation': 5
+    }
+
+    config['ACCESS'] = {
+        ";The section is about white and black list together":None,
+        ";Each next rule will override previous at the intersection of adresses sets":None,
+        ";As an options you need to specify IP network (if it one address, then it with /32 mask)"
+        ";Possible rules:":None,
+        ";\tq- OR q+ - deny OR allow all QUERIES (if its deny you may don`t specify another rules)":None,
+        ";\tc- OR c+ - deny OR allow query processing by CACHE module (affect on return response from cache)":None,
+        ";\ta- OR a+ - deny OR allow query processing by AUTHORITY module (affect on return response from own zones data)":None,
+        ";\tr- OR r+ - deny OR allow query processing by RECURSIVE module (affect on return response from own zones data)":None,
+        ";If some rule will repeat in one row applied the last one"
+        ";Examples:":None,
+        ";0.0.0.0/0: q- c- a- r-":None,
+        ";127.0.0.0/8: q+ c+ a+ r+":None,
+        ";This means that queries from all internet (0.0.0.0/0) will be deny except from 127.0.0.0/8 network":None,
+        '0.0.0.0/0': 'q- c- a- r-',
+        '127.0.0.0/8': 'q+ c+ a+ r+',      
     }
     return config
 
