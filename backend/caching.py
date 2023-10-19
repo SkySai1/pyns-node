@@ -37,7 +37,6 @@ class Caching:
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.isdownload = eval(self.conf['CACHING']['download'])
             self.isupload = eval(self.conf['CACHING']['upload'])
-            self.isrec = eval(CONF['RECURSION']['enable'])
             self.scale = float(CONF['CACHING']['scale'])
         except:
             logging.critical('Initialization of caching module is fail')
@@ -66,7 +65,7 @@ class Caching:
         qclass = dns.rdataclass.to_text(q.question[0].rdclass)
         rawcache = self.db.GetFromCache(qname,qclass,qtype)
         if rawcache:
-            r = dns.message.make_response(q, (P.check.recursive() and self.isrec))
+            r = dns.message.make_response(q, P.check.recursive())
             data = rawcache[0][0].split(' ')
             r.answer.append(
                 dns.rrset.from_text_list(qname,)
@@ -110,7 +109,7 @@ class Caching:
                     name = row.name.encode('idna').decode('utf-8')
                     key = parser(q.to_wire())
                     if not key in self.cache:
-                        r = dns.message.make_response(q, (P.check.recursive() and self.isrec))
+                        r = dns.message.make_response(q)
                         for d in row.data:
                             d = d.split(' ')
                             name,ttl,cls,t= d[:4]

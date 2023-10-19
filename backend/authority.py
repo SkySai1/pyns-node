@@ -33,7 +33,6 @@ class Authority:
             self.recursive = _rec
             self.auth = auth
             self.zones = zones
-            self.recenable = eval(_CONF['RECURSION']['enable'])
         except:
             logging.critical('initialization of authority module is fail', exc_info=(logging.DEBUG >= logging.root.level))
     
@@ -122,9 +121,9 @@ class Authority:
                     )
 
 
-    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None):
+    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None, P:Packet=None): 
         q = dns.message.make_query(cname,qtype,qcls)
-        if self.recenable is True:
+        if P and P.check.recursive():
             for i in range(3):
                 try:
                     depth = Depth()
@@ -188,7 +187,7 @@ class Authority:
                                     else:
                                         break
                                 elif isrec:
-                                    r.answer += self.findcname(cname, qtype, qclass, transport)  
+                                    r.answer += self.findcname(cname, qtype, qclass, transport, P)  
                                     break 
                                 else:
                                     break

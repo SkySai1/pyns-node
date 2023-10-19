@@ -12,7 +12,7 @@ _OPTIONS ={
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
     'AUTHORITY': [],
     'CACHING': ['expire', 'scale', 'size', 'download', 'upload'],
-    'RECURSION': ['enable',  'maxdepth', 'timeout', 'retry'],
+    'RECURSION': ['maxdepth', 'timeout', 'retry'],
     'LOGGING' : ['enable', 'keeping', 'pathway' , 'level', 'separate', 'maxsize','rotation'],
     'ACCESS': [],
 }
@@ -76,8 +76,10 @@ def checkconf(CONF:configparser.ConfigParser):
         for opt in CONF.items('ACCESS'):
             try:
                 ipaddress.ip_network(opt[0])
-                for r in opt[1].split(' '):
-                    if not re.match('^[q|c|a|r][+|-]$', r): raise Exception
+                if len(opt[1]) > 4: raise Exception
+                for r in set(opt[1]):
+                    if r not in ['Q','C','A','R']: raise Exception
+                    #if not re.match('^[q|c|a|r][+|-]$', r): raise Exception
             except:
                 msg.append(f"ACCESS: {opt[0]} = {opt[1]} <- bad statetement")
                 continue                
@@ -152,7 +154,6 @@ def deafultconf():
         'upload': True
     }
     config['RECURSION'] = {
-        'enable': False,
         ";Specify another recursion DNS server": None,
         'resolver': '',
         'maxdepth': 30,
@@ -179,20 +180,21 @@ def deafultconf():
 
     config['ACCESS'] = {
         ";The section is about white and black list together":None,
-        ";Each next rule will override previous at the intersection of adresses sets":None,
-        ";As an options you need to specify IP network (if it one address, then it with /32 mask)"
-        ";Possible rules:":None,
-        ";\tq- OR q+ - deny OR allow all QUERIES (if its deny you may don`t specify another rules)":None,
-        ";\tc- OR c+ - deny OR allow query processing by CACHE module (affect on return response from cache)":None,
-        ";\ta- OR a+ - deny OR allow query processing by AUTHORITY module (affect on return response from own zones data)":None,
-        ";\tr- OR r+ - deny OR allow query processing by RECURSIVE module (affect on return response from own zones data)":None,
-        ";If some rule will repeat in one row applied the last one"
+        ";Each next rule will override previous at the intersection of networks sets":None,
+        ";As an options you need to specify IP network or an IP address and as argument is 'Rule'":None,
+        ";Possible 'Rules':":None,
+        ";\t'Q' - allow incoming QUERIES (if its deny you may don`t specify another rules)":None,
+        ";\t'C' - allow query processing by CACHE module (affect on return response from cache)":None,
+        ";\t'A' - allow query processing by AUTHORITY module (affect on return response from own zones data)":None,
+        ";\t'R' - allow query processing by RECURSIVE module (affect on return response from own zones data)":None,
+        ";At default all rules for any network set to Deny":None,
+        ";If you need to deny all queries from some network just do not specified any 'Rule' (empty argument)":None,
         ";Examples:":None,
-        ";0.0.0.0/0: q- c- a- r-":None,
-        ";127.0.0.0/8: q+ c+ a+ r+":None,
-        ";This means that queries from all internet (0.0.0.0/0) will be deny except from 127.0.0.0/8 network":None,
-        '0.0.0.0/0': 'q- c- a- r-',
-        '127.0.0.0/8': 'q+ c+ a+ r+',      
+        ";127.0.0.0/8 = QCAR":None,
+        ";127.0.0.1/32 = ":None,
+        ";This means that queries from any networks will be deny except from 127.0.0.0/8 network":None,
+        ";but queries from 127.0.0.1 address's will be also deny":None,
+        '127.0.0.0/8': 'QCAR',      
     }
     return config
 

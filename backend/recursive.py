@@ -92,7 +92,6 @@ class Recursive:
         try:
             self.conf = _CONF
             self.state = iscache
-            self.enable = eval(_CONF['RECURSION']['enable'])
             self.maxdepth = int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])
             self.retry = int(_CONF['RECURSION']['retry'])
@@ -104,24 +103,22 @@ class Recursive:
     def recursive(self, P:Packet, cache:Caching):
         # - External resolving if specify external DNS server
         try:
-            if self.enable is True:
-                if not P.query: 
-                    P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
-                if self.resolver:
-                    result = self.extresolve(P.query)
-                
-                # - Internal resolving if it is empty
-                else:
-                    NS = TLD.get(P.query.question[0].name[1])
-                    if not NS: NS = _ROOT
-                    random.shuffle(NS)
-                    for i in range(3):
-                        D = Depth()
-                        result,_ = self.resolve(P.query, NS[i], P.transport, D)
-                        if isinstance(result, dns.message.Message): break
-                        if i >=1: NS = random.choice(_ROOT)
+            if not P.query: 
+                P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+            if self.resolver:
+                result = self.extresolve(P.query)
+            
+            # - Internal resolving if it is empty
             else:
-                result = echo(P.data,dns.rcode.REFUSED)
+                NS = TLD.get(P.query.question[0].name[1])
+                if not NS: NS = _ROOT
+                random.shuffle(NS)
+                for i in range(3):
+                    D = Depth()
+                    result,_ = self.resolve(P.query, NS[i], P.transport, D)
+                    if isinstance(result, dns.message.Message): break
+                    if i >=1: NS = random.choice(_ROOT)
+
         except:
             logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.', exc_info=(logging.DEBUG >= logging.root.level))
             result = echo(P.data,dns.rcode.SERVFAIL,[dns.flags.RA])

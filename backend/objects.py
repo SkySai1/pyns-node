@@ -1,6 +1,7 @@
 import asyncio
 import struct
 import ipaddress
+from netaddr import IPNetwork as CIDR, IPAddress as IP
 
 class ThisNode:
     id = None
@@ -15,16 +16,16 @@ class Access:
 class Rules:
 
     def __init__(self, addr, *args) -> None:
-        self.addr = ipaddress.ip_network(addr)
+        self.addr = addr
         self.access = Access()
         self.allow = self.Allow(self.access)
         self.deny = self.Deny(self.access)
 
         allower = {
-            'q': self.allow.query,
-            'c': self.allow.cache,
-            'a': self.allow.authority,
-            'r': self.allow.recursive
+            'Q': self.allow.query,
+            'C': self.allow.cache,
+            'A': self.allow.authority,
+            'R': self.allow.recursive
         }
 
         denier = {
@@ -33,9 +34,7 @@ class Rules:
             'a': self.deny.authority,
             'r': self.deny.recursive
         }            
-        for r in args: 
-            if r[-1] == '+': allower[r[0]]()
-            elif r[-1] == '-': denier[r[0]]()
+        [allower[r]() for r in args]
 
     class Allow:
 
@@ -76,13 +75,13 @@ class Packet:
     query = None
 
     def __init__(self, data:bytes, addr:tuple, transport) -> None:
-        self.access = access = Access()
+        self.access = Access()
         self.data = data
-        self.ip = ipaddress.ip_address(addr[0])
+        #self.ip = ipaddress.ip_address(addr[0])
+        self.ip = IP(addr[0])
         self.addr = addr
         self.transport = transport
-        self.allow = self.Allow(access)
-        self.check = self.Check(access)
+        self.check = self.Check(self.access)
 
     def getperms(self, as_text:bool=False):
         import re
@@ -103,24 +102,7 @@ class Packet:
             self.transport.write(l+data)
         else:
             self.transport.sendto(data, self.addr)
-
-    class Allow:
-
-        def __init__(self, access:Access) -> None:
-            self.access = access
-
-        def query(self):
-            self.access.query = True
-        
-        def cache(self):
-            self.access.cache = True
-        
-        def authority(self):
-            self.access.authority = True
-        
-        def recursive(self):
-            self.access.recursive = True
-    
+  
     class Check:
 
         def __init__(self, access:Access) -> None:

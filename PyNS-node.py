@@ -26,20 +26,17 @@ from backend.helper import Helper
 from backend.functions import echo
 from backend.logger import LogServer, logsetup
 from backend.objects import ThisNode
+from netaddr import IPNetwork as CIDR, IPAddress as IP
 
 
 _COUNT = 0
 
 def warden(data, addr, transport, rules:dict) -> Packet:
     P = Packet(data,addr, transport)
-    for network in set(rules.keys()):
-        if P.ip in network: 
+    for network in rules:
+        if P.ip in network:
             P.access.__dict__ = rules[network]
-    '''P.allow.query()
-    P.allow.cache()
-    P.allow.authority()
-    P.allow.recursive()'''
-    #print(P.access.__dict__)
+            break
 
     # -- INFO LOGGING BLOCK START --
     if logging.INFO >= logging.root.level and not logging.root.disabled:
@@ -66,10 +63,10 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 qid = int.from_bytes(data[:2],'big')
                 q = dns.message.from_wire(data,continue_on_error=True)
                 question = q.question[0].to_text()
-                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Set permissions - Allow: '{P.getperms(as_text=True)}.'")
+                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Permissions: '{P.getperms(as_text=True)}.'")
             except:
                 qid = '00000'
-                logging.debug(f"Query from {addr} is malformed!. Set permissions - Allow: '{P.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
+                logging.debug(f"Query from {addr} is malformed!. Permissions: '{P.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
         else: debug = None
 
         # -- DEBUG LOGGING BLOCK END --
@@ -96,7 +93,6 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 return result
 
         if P.check.recursive():
-            #recursive.recursive(P,cache)
             threading.Thread(target=recursive.recursive, args=(P, cache)).start()
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             return None
@@ -147,6 +143,7 @@ class TCPServer(asyncio.Protocol):
         self.recursive = _recursive
         self.cache = _cache
         self.stat = stat
+        self.rules = rules
         super().__init__()    
     
 
@@ -158,7 +155,7 @@ class TCPServer(asyncio.Protocol):
             global _COUNT
             _COUNT += 1
         addr = self.transport.get_extra_info('peername')
-        result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport)
+        result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport, self.rules)
         
 
         # -- INFO LOGGING BLOCK START --
@@ -260,12 +257,13 @@ def start(CONF):
     ThisNode.name = CONF['DATABASE']['node']
     logreciever = logsetup(CONF, __name__)
     rules = {}
-    for opt in CONF.items('ACCESS'):
-            ip = ipaddress.ip_network(opt[0])
-            args = opt[1].split(' ')
-            Rule = Rules(ip, *args)
+    networks = CONF.items('ACCESS')
+    networks.reverse()
+    for opt in networks:
+            cidr = CIDR(opt[0])
+            args = set(opt[1])
+            Rule = Rules(cidr, *args)
             rules[Rule.addr] = Rule.access.__dict__              
-
     try: 
         with Manager() as manager:
             # -Init Classes
