@@ -220,7 +220,7 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
                 threading.Thread(target=_cache.debuff, daemon=True).start()
             else:
                 logging.error(f"{ip} is not available")
-            print(f"Core {current_process().name} Start listen to: {addresses, port}")
+        print(f"Core {current_process().name} Start listen to: ({', '.join(addresses)}): {port}")
     except Exception as e:
         logging.critical('some problem with main launcher', exc_info=(logging.DEBUG >= logging.root.level))
 
