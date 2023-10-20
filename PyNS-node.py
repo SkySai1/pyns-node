@@ -3,6 +3,7 @@ import datetime
 import ipaddress
 import logging
 import asyncio
+import re
 import struct
 from logging.handlers import DEFAULT_UDP_LOGGING_PORT
 from multiprocessing import Process, cpu_count, Pipe, current_process, Manager
@@ -41,11 +42,8 @@ def warden(data, addr, transport, rules:dict) -> Packet:
     # -- INFO LOGGING BLOCK START --
     if logging.INFO >= logging.root.level and not logging.root.disabled:
         try:
-            qid = struct.unpack('>H',data[:2])[0]
-            name,l = dns.name.from_wire(data,12)
-            qtype = struct.unpack('>B',data[14+l-1:14+l])[0]
-            qclass = struct.unpack('>B',data[16+l-1:16+l])[0]
-            logging.info(f"Get Query({qid}) from {addr} '{name.to_text()} {qclass} {qtype}'")
+            q = dns.message.from_wire(data, continue_on_error=True, ignore_trailing=True, raise_on_truncation=False)
+            logging.info(f"Get Query({q.id}) from {addr} '{q.question[0].to_text()}'")
         except:
             logging.info(f"Query from {addr} is malformed!", exc_info=(logging.DEBUG >= logging.root.level))
     # -- INFO LOGGING BLOCK END --
@@ -100,7 +98,9 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
             return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
-        logging.error(f'Fail handle query {result.question[0].to_text()}', exc_info=(logging.DEBUG >= logging.root.level))
+        if result: info = result.question[0].to_text()
+        else: info = "from %s, is malformed!" % addr
+        logging.error(f'Fail handle query {info}', exc_info=(logging.DEBUG >= logging.root.level))
 
 
 # --- UDP socket ---
@@ -124,11 +124,10 @@ class UDPserver(asyncio.DatagramProtocol):
         result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport, self.rules)
         
         # -- INFO LOGGING BLOCK START --
-        if logging.INFO >= logging.root.level and not logging.root.disabled:
+        '''if logging.INFO >= logging.root.level and not logging.root.disabled:
             qid = int.from_bytes(data[:2],'big')
-            if isinstance(result, dns.message.Message): rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
-            else: rcode = 'UNKOWN'
-            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
+            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
+            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
         # -- INFO LOGGING BLOCK END --
 
 
@@ -159,10 +158,10 @@ class TCPServer(asyncio.Protocol):
         
 
         # -- INFO LOGGING BLOCK START --
-        if logging.INFO >= logging.root.level and not logging.root.disabled:
+        '''if logging.INFO >= logging.root.level and not logging.root.disabled:
             qid = int.from_bytes(data[:2],'big')
             rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
-            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")
+            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
         # -- INFO LOGGING BLOCK END --
         
         if result:
@@ -211,16 +210,17 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
 
     # -MainListener IP-
     try:
-        ip = CONF['GENERAL']['listen-ip']
+        addresses = [ip for ip in re.sub('\s','',str(CONF['GENERAL']['listen-ip'])).split(',')]
         port = int(CONF['GENERAL']['listen-port'])
         l = []
-        if ipaddress.ip_address(ip).version == 4:
-            threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, True)).start()
-            threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, False)).start()
-            threading.Thread(target=_cache.debuff, daemon=True).start()
-            print(f"Core {current_process().name} Start listen to: {ip, port}")
-        else:
-            logging.error(f"{ip} is not available")
+        for ip in addresses:
+            if ipaddress.ip_address(ip).version == 4:
+                threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, True)).start()
+                threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, False)).start()
+                threading.Thread(target=_cache.debuff, daemon=True).start()
+                print(f"Core {current_process().name} Start listen to: {ip, port}")
+            else:
+                logging.error(f"{ip} is not available")
     except Exception as e:
         logging.critical('some problem with main launcher', exc_info=(logging.DEBUG >= logging.root.level))
 

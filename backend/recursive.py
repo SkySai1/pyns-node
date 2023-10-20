@@ -1,9 +1,8 @@
 #!/home/dnspy/server/dns/bin/python3
-import asyncio
 import ipaddress
 import random
+import re
 import socket
-import threading
 import dns.message
 import dns.rrset
 import dns.query
@@ -14,8 +13,8 @@ import dns.rcode
 import dns.name
 import dns.flags
 import logging
+from netaddr import IPAddress as IP
 from backend.caching import Caching
-
 from backend.functions import echo
 from backend.objects import Packet
 
@@ -91,6 +90,7 @@ class Recursive:
     def __init__(self, _CONF, iscache = True):
         try:
             self.conf = _CONF
+            self.listen = [IP(ip) for ip in re.sub('\s','',str(_CONF['GENERAL']['listen-ip'])).split(',')]
             self.state = iscache
             self.maxdepth = int(_CONF['RECURSION']['maxdepth'])
             self.timeout = float(_CONF['RECURSION']['timeout'])
@@ -110,8 +110,11 @@ class Recursive:
             
             # - Internal resolving if it is empty
             else:
-                NS = TLD.get(P.query.question[0].name[1])
-                if not NS: NS = _ROOT
+                try:
+                    NS = TLD.get(P.query.question[0].name[1])
+                    if not NS: NS = _ROOT
+                except:
+                    NS = _ROOT
                 random.shuffle(NS)
                 for i in range(3):
                     D = Depth()
@@ -120,7 +123,9 @@ class Recursive:
                     if i >=1: NS = random.choice(_ROOT)
 
         except:
-            logging.error(f'Recursive search fail at \'{dns.name.from_wire(P.data,12)[0]}\'.', exc_info=(logging.DEBUG >= logging.root.level))
+            try: info = dns.name.from_wire(P.data,12)[0]
+            except: info = f'from {P.addr}. Querie is malformed!'
+            logging.error(f'Recursive search is fail \'{info}\'.', exc_info=(logging.DEBUG >= logging.root.level))
             result = echo(P.data,dns.rcode.SERVFAIL,[dns.flags.RA])
         finally:
             if result:
@@ -143,11 +148,19 @@ class Recursive:
         try:
             for i in range(self.retry):
                 try:
-                    result = dns.query.udp(query, ns, self.timeout)
+                    if IP(ns) in self.listen:
+                        logging.warning(f"Query loop detected at {query.question[0].to_text()}")
+                        result = echo(query,dns.rcode.SERVFAIL)
+                        return result, ns
+                    if ipaddress.ip_address(ns):
+                        result = dns.query.udp(query, ns, self.timeout)
                     break
                 except dns.exception.Timeout as e:
                     result = None
                     pass
+                except ValueError:
+                    result = None
+                    break
             if _DEBUG in [2,3]: print(result,'\n\n')  # <- SOME DEBUG
             if not result: 
                 return None, ns
@@ -169,7 +182,7 @@ class Recursive:
                     result.question[0].rdtype,
                     result.question[0].rdclass
                 )
-                cname_res, _ = self.resolve(qcname, random.choice(_ROOT), transport)
+                cname_res, _ = self.resolve(query=qcname, ns=random.choice(_ROOT), transport=transport)
                 if cname_res.answer:
                     [result.answer.append(rrset) for rrset in cname_res.answer]
 
@@ -181,7 +194,7 @@ class Recursive:
             for rr in result.additional:
                 ns = str(rr[0])
                 if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
-                    result, _ = self.resolve(query, ns, transport, depth)
+                    result, _ = self.resolve(query=query, ns=ns, transport=transport, depth=depth)
                     if result:
                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN] 
                         or dns.flags.AA in result.flags):
@@ -194,7 +207,7 @@ class Recursive:
                     qname = dns.name.from_text(str(rr))
                     nsquery = dns.message.make_query(qname, dns.rdatatype.A, dns.rdataclass.IN)
                     for ns in _ROOT:
-                        nsdata, _ = self.resolve(nsquery, ns, transport, depth)
+                        nsdata, _ = self.resolve(query=nsquery, ns=ns, transport=transport, depth=depth)
                         if nsdata:
                             if not nsdata.rcode() in [
                             dns.rcode.NOERROR, dns.rcode.REFUSED]:
@@ -203,7 +216,7 @@ class Recursive:
                                 for rr in nsdata.answer:
                                     ns = str(rr[0])
                                     if rr.rdtype == dns.rdatatype.A and ipaddress.ip_address(ns).version == 4:
-                                        result, ns = self.resolve(query, ns, transport, depth)
+                                        result, ns = self.resolve(query=query, ns=ns, transport=transport, depth=depth)
                                     if result:
                                         if (result.rcode() in [dns.rcode.NOERROR, dns.rcode.REFUSED, dns.rcode.NXDOMAIN]
                                            or dns.flags.AA in result.flags): 

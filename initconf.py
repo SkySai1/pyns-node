@@ -6,6 +6,7 @@ import re
 import sys
 import os, platform
 import ipaddress
+from netaddr import IPAddress as IP
 
 _OPTIONS ={
     'GENERAL': ['mode','listen-ip', 'listen-port', 'printstats', 'timedelta'],
@@ -41,7 +42,7 @@ def checkconf(CONF:configparser.ConfigParser):
             for opt in CONF.items(s):
                 try:
                     if opt[0] == 'mode' and opt[1] not in ['unit', 'alone', 'proxy']: raise Exception                    
-                    if opt[0] == 'listen-ip': ipaddress.ip_address(opt[1]).version == 4
+                    if opt[0] == 'listen-ip': [IP(ip) for ip in re.sub('\s','',str(opt[1])).split(',')]
                     if opt[0] == 'listen-port': int(opt[1])
                     if opt[0] == 'printstats': eval(opt[1])
                     if opt[0] == 'expire': float(opt[1])
@@ -118,6 +119,7 @@ def deafultconf():
         "; 'alone' - independent DNS server with load zones from files":None,
         "; 'proxy' - forward all queries (include AXFR) to another DNS server and back":None,
         'mode': 'unit',
+        ";For severity listen-ip addresses specify them with comma, like '127.0.0.1, 127.0.0.2, 127.0.0.3'":None,
         'listen-ip': '127.0.0.2',
         'listen-port': 53,
         ";Print statistic in console": None,

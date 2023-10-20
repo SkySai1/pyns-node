@@ -117,8 +117,8 @@ class Caching:
                             r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
                         result = dns.message.Message.to_wire(r)[2:]
                         self.cache[key] = result
-                logging.debug(f"{name} was found in basecache")
-                return result
+                        logging.debug(f"{name} was found in basecache")
+                        return result
             else:
                 return None
         except:

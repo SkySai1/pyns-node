@@ -83,16 +83,13 @@ class Authority:
                 add.append(obj[0])
         return add
 
-    def fakezone(self, query:dns.message.Message, zone):
-            response = dns.message.make_response(query)
+    def fakezone(self, r:dns.message.Message, zone):
             rawdata = self.db.GetFromDomains(qname=zone,rdclass='IN', rdtype='SOA',zone=zone)
             if rawdata:
                 soa = rawdata[0][0].data[-1]
                 ttl = rawdata[0][0].ttl
                 record = dns.rrset.from_text(zone,int(ttl),'IN','SOA', soa)
-                response.authority.append(record)
-                response.set_rcode(dns.rcode.NXDOMAIN)
-            return response
+                r.authority.append(record)
 
     def filling(self, data, qname:dns.name.Name=None, qtype:str|list=None):
         if isinstance(qtype,str): qtype = [qtype]
@@ -133,7 +130,7 @@ class Authority:
                     if r:
                         return r.answer
                 except:
-                    i+=1
+                    pass
         return []
 
     def get(self, P:Packet):
@@ -172,36 +169,36 @@ class Authority:
             node, zone, auth, state, sign = self.findnode(qname, qclass)
             if not zone: return None, None, False
             r = dns.message.make_response(P.query)
-            if state is not None:
-                if state is True:
-                    r.flags += dns.flags.AA
-                    if node:
-                        r.answer = self.filling(node, qname, [qtype, 'CNAME'])
-                        if r.answer and qtype != 'CNAME':
-                            while r.answer[-1].rdtype is dns.rdatatype.CNAME:
-                                cname = dns.name.from_text(r.answer[-1][0].to_text())
-                                crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                                cnode, zone, auth, state, _ = self.findnode(cname, crdclass)
-                                if cnode:
-                                    if state:
-                                        r.answer += self.filling(cnode, cname, [qtype, 'CNAME'])
-                                    else:
-                                        break
-                                elif isrec:
-                                    r.answer += self.findcname(cname, qtype, qclass, transport, P)  
-                                    break 
+            if state:
+                r.flags += dns.flags.AA
+                if node:
+                    r.answer = self.filling(node, qname, [qtype, 'CNAME'])
+                    if r.answer and qtype != 'CNAME':
+                        while r.answer[-1].rdtype is dns.rdatatype.CNAME:
+                            cname = dns.name.from_text(r.answer[-1][0].to_text())
+                            crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
+                            cnode, zone, auth, state, _ = self.findnode(cname, crdclass)
+                            if cnode:
+                                if state:
+                                    r.answer += self.filling(cnode, cname, [qtype, 'CNAME'])
                                 else:
                                     break
-                    if not r.answer and not r.authority:
-                        r.set_rcode(dns.rcode.NXDOMAIN)
-                        r = self.fakezone(P.query,zone)
-                if state is False and auth:
-                    targets = []
-                    r.authority = self.filling(auth,qtype=None)                  
-                    targets = [ns for a in auth for ns in a.data]
-                    if targets:
-                        add = self.findadd(targets)
-                        r.additional = self.filling(add)
+                            elif isrec:
+                                r.answer += self.findcname(cname, qtype, qclass, transport, P)  
+                                break 
+                            else:
+                                break
+                else:
+                    r.set_rcode(dns.rcode.NXDOMAIN)
+                if not r.answer and not r.authority:
+                    self.fakezone(r,zone)
+            elif auth:
+                targets = []
+                r.authority = self.filling(auth,qtype=None)                  
+                targets = [ns for a in auth for ns in a.data]
+                if targets:
+                    add = self.findadd(targets)
+                    r.additional = self.filling(add)
             try:
                 if (sign and DO):
                     self.signer(r.answer, zone)
@@ -217,9 +214,10 @@ class Authority:
                     return r.to_wire(max_size=65535), r, True
             
         except:
-            logging.error('get data from local zones is fail', exc_info=(logging.DEBUG >= logging.root.level))
+            logging.error('Get data from local zones is fail.', exc_info=(logging.DEBUG >= logging.root.level))
             r = echo(P.query,dns.rcode.SERVFAIL)
-            return r.to_wire(), r, True
+            if r: return r.to_wire(), r, True
+            else: return None, None, False
 
     '''def download(self, db:AccessDB):
         # --Getting all records from cache tatble
