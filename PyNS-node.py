@@ -218,9 +218,9 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
                 threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, True)).start()
                 threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, False)).start()
                 threading.Thread(target=_cache.debuff, daemon=True).start()
-                print(f"Core {current_process().name} Start listen to: {ip, port}")
             else:
                 logging.error(f"{ip} is not available")
+            print(f"Core {current_process().name} Start listen to: {addresses, port}")
     except Exception as e:
         logging.critical('some problem with main launcher', exc_info=(logging.DEBUG >= logging.root.level))
 
