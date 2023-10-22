@@ -48,7 +48,7 @@ def logsetup(CONF, name):
 
             mainlog = logging.getLogger('mainlog')
             mainlog.propagate = False
-            logform = LogFormatter(timedelta, "%(asctime)s %(levelname)s %(processName)s - %(threadName)s:: %(message)s")
+            logform = LogFormatter(timedelta, "%(asctime)s %(levelname)s %(processName)s %(threadName)s:: %(message)s")
             #logform = logging.Formatter("%(asctime)s %(levelname)s %(processName)s - %(threadName)s:: %(message)s")
 
             if CONF['LOGGING']['keeping'] in ["file", "both"]:

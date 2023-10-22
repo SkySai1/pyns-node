@@ -137,6 +137,7 @@ enable = True
 - ✅ **Return zones via transfer** *Done. Need to realese download keys from DB*
 - ✅ **Return zones via transfer with TSIG** *Done. It's finily working!*
 - ✅ **CNAME recursion** *Recursion search if rdata is not exist in database*
+- 🔥 **Authoirty CNAME lookup is broken** *At quries with non-existing rdtypes to CNAME domain*
 - ✅ **Authoirty former** *Make authoirty information for answer records*
 - 🚩 **Politics and settings for zones** *Awaitng master release* 
 - ✅ **TSIG keeping with zones binding** *Awaitng master release*

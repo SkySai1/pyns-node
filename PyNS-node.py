@@ -31,12 +31,14 @@ from netaddr import IPNetwork as CIDR, IPAddress as IP
 
 
 _COUNT = 0
+_DEBUG = []
+
 
 def warden(data, addr, transport, rules:dict) -> Packet:
     P = Packet(data,addr, transport)
     for network in rules:
         if P.ip in network:
-            P.access.__dict__ = rules[network]
+            P.reaccess(rules[network])
             break
 
     # -- INFO LOGGING BLOCK START --
@@ -62,13 +64,17 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 q = dns.message.from_wire(data,continue_on_error=True)
                 question = q.question[0].to_text()
                 logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Permissions: '{P.getperms(as_text=True)}.'")
+                #global _DEBUG
+                #if not question in _DEBUG:
+                #    print(datetime.datetime.now(), current_process().name, question)
+                #    _DEBUG.append(question)
             except:
                 qid = '00000'
                 logging.debug(f"Query from {addr} is malformed!. Permissions: '{P.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
-        else: debug = None
+        else: 
+            debug = None
 
         # -- DEBUG LOGGING BLOCK END --
-
 
         if P.check.query() is False:
             if debug: logging.debug(f"Query({qid}) from {addr} is not Allowed. REFUSED.")
@@ -118,21 +124,28 @@ class UDPserver(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        if self.stat is True:
-            global _COUNT
-            _COUNT += 1
-        result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport, self.rules)
-        
-        # -- INFO LOGGING BLOCK START --
-        '''if logging.INFO >= logging.root.level and not logging.root.disabled:
-            qid = int.from_bytes(data[:2],'big')
-            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
-            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
-        # -- INFO LOGGING BLOCK END --
+        try:
+   
+            if self.stat is True:
+                global _COUNT
+                _COUNT += 1
+            result = handle(self.auth, self.recursive, self.cache, data, addr, self.transport, self.rules)
+            
+            # -- INFO LOGGING BLOCK START --
+            '''if logging.INFO >= logging.root.level and not logging.root.disabled:
+                qid = int.from_bytes(data[:2],'big')
+                rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
+                logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
+            # -- INFO LOGGING BLOCK END --
 
 
-        if result:
-            self.transport.sendto(result, addr)
+            if result:
+                self.transport.sendto(result, addr)
+        except:
+            sock = self.transport.get_extra_info('socket')
+            laddr = sock.getsockname()
+            logging.error(f'UDP fail with handle query from {addr} at {laddr}', exc_info=(logging.DEBUG >= logging.root.level))
+            self.transport.sendto(data, addr)
 
 # -- TCP socket --
 class TCPServer(asyncio.Protocol):
@@ -150,25 +163,29 @@ class TCPServer(asyncio.Protocol):
         self.transport = transport
 
     def data_received(self, data):
-        if self.stat is True:
-            global _COUNT
-            _COUNT += 1
-        addr = self.transport.get_extra_info('peername')
-        result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport, self.rules)
-        
+        try:
+            if self.stat is True:
+                global _COUNT
+                _COUNT += 1
+            addr = self.transport.get_extra_info('peername')
+            result = handle(self.auth, self.recursive, self.cache, data[2:], addr, self.transport, self.rules)
+            
 
-        # -- INFO LOGGING BLOCK START --
-        '''if logging.INFO >= logging.root.level and not logging.root.disabled:
-            qid = int.from_bytes(data[:2],'big')
-            rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
-            logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
-        # -- INFO LOGGING BLOCK END --
-        
-        if result:
-            l = struct.pack('>H',len(result))
-            self.transport.write(l+result)
-        
-
+            # -- INFO LOGGING BLOCK START --
+            '''if logging.INFO >= logging.root.level and not logging.root.disabled:
+                qid = int.from_bytes(data[:2],'big')
+                rcode = dns.rcode.to_text(struct.unpack('>B',result[4:5])[0])
+                logging.info(f"Return response ({qid}) to client {addr}. {rcode}'")'''
+            # -- INFO LOGGING BLOCK END --
+            
+            if result:
+                l = struct.pack('>H',len(result))
+                self.transport.write(l+result)
+        except:
+            sock = self.transport.get_extra_info('socket')
+            laddr = sock.getsockname()
+            logging.error(f'TCP fail with handle query from {addr} at {laddr}',exc_info=(logging.DEBUG >= logging.root.level))
+            self.transport.write(data)
 
 def listener(ip, port, _auth:Authority, _recursive:Recursive, _cache:Caching, stat, CONF, rules, isudp:bool=True,):
     loop = asyncio.new_event_loop()
@@ -263,7 +280,7 @@ def start(CONF):
             cidr = CIDR(opt[0])
             args = set(opt[1]) - {'+'}
             Rule = Rules(cidr, *args)
-            rules[Rule.addr] = Rule.access.__dict__             
+            rules[Rule.addr] = Rule.access             
     try: 
         with Manager() as manager:
             # -Init Classes
@@ -290,7 +307,7 @@ def start(CONF):
             for i in range(cpu_count()):
                 try:
                     gather, stat = Pipe()
-                    name = f'Listener#{i}'
+                    name = f'Core#{i}'
                     p = Process(target=launcher, args=(stat, CONF, _cache, _auth, _recursive, rules), name=name)
                     p.start()
                     logging.debug(f'New Listener ({name}) was started successful')

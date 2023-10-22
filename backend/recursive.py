@@ -104,7 +104,10 @@ class Recursive:
         # - External resolving if specify external DNS server
         try:
             if not P.query: 
-                P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+                try: P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+                except:
+                    logging.warning(f"Query from {P.addr} is malformed!") 
+                    return
             if self.resolver:
                 result = self.extresolve(P.query)
             

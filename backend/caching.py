@@ -51,11 +51,14 @@ class Caching:
         wait = self.buffexp
         while True:
             time.sleep(wait)
+            load = p.cpu_percent()
             self.buff.clear()
-            m = self.scale*round(p.cpu_percent() / 100, 2)
+            m = self.scale*round(load / 100, 2)
             if m < 1: m = 1
             try: 
                 wait = self.buffexp * m
+                if wait > self.buffexp*1.5:
+                    logging.warning(f"Core CPU load is: {load}%, corecash clear delay for this one is {wait}'s now")
             except: wait = self.buffexp
 
     def find(self, P:Packet):
@@ -89,10 +92,10 @@ class Caching:
             logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return P.data[2:], False
 
-    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isuath:bool=False):
+    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isauth:bool=False):
         key = parser(query)
         if not key in self.cache and self.refresh > 0:
-            if isuath:
+            if isauth:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD + dns.flags.AA)
             else:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
@@ -147,7 +150,7 @@ class Caching:
                 emptyid = int.to_bytes(0,2,'big')
                 queries = []
                 for data in self.cache.values():
-                    q = dns.message.from_wire(emptyid+data)
+                    q = dns.message.from_wire(emptyid+data,continue_on_error=True, ignore_trailing=True)
                     queries.append(f"'{q.question[0].to_text()}'")                   
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --

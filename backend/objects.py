@@ -73,11 +73,10 @@ class Rules:
 
 class Packet:
     query = None
+    access = Access
 
     def __init__(self, data:bytes, addr:tuple, transport) -> None:
-        self.access = Access()
         self.data = data
-        #self.ip = ipaddress.ip_address(addr[0])
         self.ip = IP(addr[0])
         self.addr = addr
         self.transport = transport
@@ -90,8 +89,7 @@ class Packet:
         perms[self.check.cache.__name__] = self.check.cache()
         perms[self.check.authority.__name__] = self.check.authority()
         perms[self.check.recursive.__name__] = self.check.recursive()
-        '''for p in self.access.__dict__:
-            perms.append((p, self.access.__dict__[p]))'''
+
         if as_text:
             perms = ", ".join([f"{str(p).upper()} is {str(perms[p])}" for p in perms])
         return perms
@@ -103,10 +101,13 @@ class Packet:
         else:
             self.transport.sendto(data, self.addr)
   
-    class Check:
+    def reaccess(self, access:Access):
+        self.check = self.Check(access)
+
+    class Check(Access):
 
         def __init__(self, access:Access) -> None:
-            self.access = access        
+            self.access = access     
 
         def query(self):
             return self.access.query

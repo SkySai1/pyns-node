@@ -17,6 +17,7 @@ def echo(m:dns.message.Message|bytes, state:dns.rcode=dns.rcode.NOERROR, flags:l
         return result
     except:
         logging.error('Making echo dns answer is fail.', exc_info=(logging.DEBUG >= logging.root.level))
+        return None
 
 def getnow(delta, rise):
     '''

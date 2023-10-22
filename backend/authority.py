@@ -173,6 +173,7 @@ class Authority:
                 r.flags += dns.flags.AA
                 if node:
                     r.answer = self.filling(node, qname, [qtype, 'CNAME'])
+                    ### -- NEED TO RE THINK -- 
                     if r.answer and qtype != 'CNAME':
                         while r.answer[-1].rdtype is dns.rdatatype.CNAME:
                             cname = dns.name.from_text(r.answer[-1][0].to_text())
@@ -181,13 +182,13 @@ class Authority:
                             if cnode:
                                 if state:
                                     r.answer += self.filling(cnode, cname, [qtype, 'CNAME'])
+                                    break
                                 else:
                                     break
                             elif isrec:
-                                r.answer += self.findcname(cname, qtype, qclass, transport, P)  
-                                break 
-                            else:
+                                r.answer += self.findcname(cname, qtype, qclass, transport, P)   
                                 break
+                            
                 else:
                     r.set_rcode(dns.rcode.NXDOMAIN)
                 if not r.answer and not r.authority:
