@@ -28,38 +28,40 @@ class Caching:
             self.conf = CONF
             self.keys = set()
             self.refresh = int(CONF['DATABASE']['timesync'])
-            self.cache = CACHE
+            self.sharecache = CACHE
             self.temp = TEMP
             self.state = True
-            self.buff = {}#list()
-            self.buffexp = float(CONF['CACHING']['expire'])
-            self.bufflimit = int(CONF['CACHING']['size'])
+            self.corecache = {}#list()
+            self.expire = float(CONF['CACHING']['expire'])
+            self.corecachesize = int(CONF['CACHING']['size'])
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.isdownload = eval(self.conf['CACHING']['download'])
             self.isupload = eval(self.conf['CACHING']['upload'])
             self.scale = float(CONF['CACHING']['scale'])
+
+            if self.scale < 1: self.scale = 1
         except:
             logging.critical('Initialization of caching module is fail')
 
     def connect(self, db:AccessDB):
         self.db = db
 
-    def debuff(self):
+    def corecash_cleaner(self):
         a = current_process()
         p = Process(a.pid)
         p.cpu_percent()
-        wait = self.buffexp
+        wait = self.expire
         while True:
             time.sleep(wait)
             load = p.cpu_percent()
-            self.buff.clear()
+            self.corecache.clear()
             m = self.scale*round(load / 100, 2)
             if m < 1: m = 1
             try: 
-                wait = self.buffexp * m
-                if wait > self.buffexp*1.5:
+                wait = self.expire * m
+                if wait > self.expire*1.5:
                     logging.warning(f"Core CPU load is: {load}%, corecash clear delay for this one is {wait}'s now")
-            except: wait = self.buffexp
+            except: wait = self.expire
 
     def find(self, P:Packet):
         q = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
@@ -77,14 +79,14 @@ class Caching:
 
     def get(self, P:Packet):
         try:
-            result, key = iterater(P.data, self.buff)
+            result, key = iterater(P.data, self.corecache)
             if result: return result, True
-            result = self.cache.get(key)
+            result = self.sharecache.get(key)
             if result:
-                if sys.getsizeof(self.buff) > self.bufflimit:
-                    print(sys.getsizeof(self.buff), self.bufflimit) 
-                    a = self.buff.pop(list(self.buff.keys())[0])
-                self.buff[key] = result
+                if sys.getsizeof(self.corecache) > self.corecachesize:
+                    print(sys.getsizeof(self.corecache), self.corecachesize) 
+                    a = self.corecache.pop(list(self.corecache.keys())[0])
+                self.corecache[key] = result
             else:
                 result = self.download(P)
             return result, False
@@ -94,12 +96,12 @@ class Caching:
 
     def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isauth:bool=False):
         key = parser(query)
-        if not key in self.cache and self.refresh > 0:
+        if not key in self.sharecache and self.refresh > 0:
             if isauth:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD + dns.flags.AA)
             else:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
-            self.buff[key] = self.cache[key] = data[2:]
+            self.corecache[key] = self.sharecache[key] = data[2:]
             if isupload and response.answer:
                 self.temp.append(response)
 
@@ -111,7 +113,7 @@ class Caching:
                     row = obj[0]
                     name = row.name.encode('idna').decode('utf-8')
                     key = parser(q.to_wire())
-                    if not key in self.cache:
+                    if not key in self.sharecache:
                         r = dns.message.make_response(q)
                         for d in row.data:
                             d = d.split(' ')
@@ -119,7 +121,7 @@ class Caching:
                             data = ' '.join(d[4:])
                             r.answer.append(dns.rrset.from_text(name,ttl,cls,t,data))
                         result = dns.message.Message.to_wire(r)[2:]
-                        self.cache[key] = result
+                        self.sharecache[key] = result
                         logging.debug(f"{name} was found in basecache")
                         return result
             else:
@@ -149,13 +151,13 @@ class Caching:
             if self.temp and logging.DEBUG >= logging.root.level and not logging.root.disabled:
                 emptyid = int.to_bytes(0,2,'big')
                 queries = []
-                for data in self.cache.values():
+                for data in self.sharecache.values():
                     q = dns.message.from_wire(emptyid+data,continue_on_error=True, ignore_trailing=True)
                     queries.append(f"'{q.question[0].to_text()}'")                   
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --
 
-            [self.cache.pop(e) for e in self.cache.keys()]
+            [self.sharecache.pop(e) for e in self.sharecache.keys()]
             db.CacheExpired(expired=getnow(self.timedelta, 0))
             if eval(self.conf['CACHING']['upload']) is True:           
                 if self.temp:

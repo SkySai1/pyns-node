@@ -234,7 +234,7 @@ def launcher(statiscics:Pipe, CONF, _cache:Caching, _auth:Authority, _recursive:
             if ipaddress.ip_address(ip).version == 4:
                 threading.Thread(target=listener,name='UDP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, True)).start()
                 threading.Thread(target=listener,name='TCP-handler',args=(ip, port, _auth,_recursive,_cache, stat, CONF, rules, False)).start()
-                threading.Thread(target=_cache.debuff, daemon=True).start()
+                threading.Thread(target=_cache.corecash_cleaner, name='CC_Cleaner', daemon=True).start()
             else:
                 logging.error(f"{ip} is not available")
         print(f"Core {current_process().name} Start listen to: ({', '.join(addresses)}): {port}")
