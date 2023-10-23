@@ -71,7 +71,7 @@ class Rules:
             self.access.recursive = False
 
 
-class Packet:
+class Query:
     query = None
     access = Access
 
@@ -101,7 +101,7 @@ class Packet:
         else:
             self.transport.sendto(data, self.addr)
   
-    def reaccess(self, access:Access):
+    def set_rules(self, access:Access):
         self.check = self.Check(access)
 
     class Check(Access):

@@ -21,7 +21,7 @@ from backend.accessdb import AccessDB, enginer
 from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
-from backend.objects import Packet, Rules
+from backend.objects import Query, Rules
 from initconf import getconf
 from backend.helper import Helper
 from backend.functions import echo
@@ -31,31 +31,19 @@ from netaddr import IPNetwork as CIDR, IPAddress as IP
 
 
 _COUNT = 0
-_DEBUG = []
-
-
-def warden(data, addr, transport, rules:dict) -> Packet:
-    P = Packet(data,addr, transport)
-    for network in rules:
-        if P.ip in network:
-            P.reaccess(rules[network])
-            break
-
-    # -- INFO LOGGING BLOCK START --
-    if logging.INFO >= logging.root.level and not logging.root.disabled:
-        try:
-            q = dns.message.from_wire(data, continue_on_error=True, ignore_trailing=True, raise_on_truncation=False)
-            logging.info(f"Get Query({q.id}) from {addr} '{q.question[0].to_text()}'")
-        except:
-            logging.info(f"Query from {addr} is malformed!", exc_info=(logging.DEBUG >= logging.root.level))
-    # -- INFO LOGGING BLOCK END --
-    return P
-
-
 
 def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:tuple, transport, rules):
     try:
-        P = warden(data, addr, transport, rules)
+
+
+        Q = Query(data, addr, transport)
+        for network in rules:
+            if Q.ip in network:
+                Q.set_rules(rules[network])
+                break
+
+
+
         # -- DEBUG LOGGING BLOCK START --
         if logging.DEBUG >= logging.root.level and not logging.root.disabled:
             debug = True
@@ -63,45 +51,41 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 qid = int.from_bytes(data[:2],'big')
                 q = dns.message.from_wire(data,continue_on_error=True)
                 question = q.question[0].to_text()
-                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Permissions: '{P.getperms(as_text=True)}.'")
-                #global _DEBUG
-                #if not question in _DEBUG:
-                #    print(datetime.datetime.now(), current_process().name, question)
-                #    _DEBUG.append(question)
+                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Permissions: '{Q.getperms(as_text=True)}.'")
             except:
                 qid = '00000'
-                logging.debug(f"Query from {addr} is malformed!. Permissions: '{P.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
+                logging.debug(f"Query from {addr} is malformed!. Permissions: '{Q.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
         else: 
             debug = None
 
         # -- DEBUG LOGGING BLOCK END --
 
-        if P.check.query() is False:
+        if Q.check.query() is False:
             if debug: logging.debug(f"Query({qid}) from {addr} is not Allowed. REFUSED.")
-            result = P.data[:3] + b'\x05' + P.data[4:] # <- REFUSED RCODE
+            result = Q.data[:3] + b'\x05' + Q.data[4:] # <- REFUSED RCODE
             return result
      
 
-        if P.check.cache():
-            result, state = cache.get(P) # <- Try to take data from Cache
+        if Q.check.cache():
+            result = cache.get(Q) # <- Try to take data from Cache
             if result:
-                if debug: logging.debug(f"Query({qid}) from {addr} was returned from cache. Core cash is {state}.")
+                if debug: logging.debug(f"Query({qid}) from {addr} was returned from cache.")
                 return data[:2]+result
 
-        if P.check.authority():
-            result, response, iscache = auth.get(P) # <- Try to take data from Authoirty
+        if Q.check.authority():
+            result, response, iscache = auth.get(Q) # <- Try to take data from Authoirty
             if result:
                 if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
                 if iscache is True:
                     threading.Thread(target=cache.put, args=(data, result, response, False, True)).start()
                 return result
 
-        if P.check.recursive():
-            threading.Thread(target=recursive.recursive, args=(P, cache)).start()
+        if Q.check.recursive():
+            threading.Thread(target=recursive.recursive, args=(Q, cache)).start()
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             return None
-        else:
-            return echo(data,dns.rcode.REFUSED).to_wire()
+
+        return echo(data,dns.rcode.REFUSED).to_wire()
     except:
         result = echo(data,dns.rcode.SERVFAIL)
         if result: info = result.question[0].to_text()

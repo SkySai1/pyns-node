@@ -15,7 +15,7 @@ import dns.flags
 import sys
 from backend.accessdb import AccessDB
 from backend.functions import getnow
-from backend.objects import Packet
+from backend.objects import Query
 try: from backend.cparser import parser, iterater
 except: from backend.parser import parser, iterater
 
@@ -63,7 +63,7 @@ class Caching:
                     logging.warning(f"Core CPU load is: {load}%, corecash clear delay for this one is {wait}'s now")
             except: wait = self.expire
 
-    def find(self, P:Packet):
+    def find(self, P:Query):
         q = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
         qname = q.question[0].name.to_text()
         qtype = dns.rdatatype.to_text(q.question[0].rdtype)
@@ -77,10 +77,10 @@ class Caching:
             )
         return None        
 
-    def get(self, P:Packet):
+    def get(self, Q:Query):
         try:
-            result, key = iterater(P.data, self.corecache)
-            if result: return result, True
+            result, key = iterater(Q.data, self.corecache)
+            if result: return result
             result = self.sharecache.get(key)
             if result:
                 if sys.getsizeof(self.corecache) > self.corecachesize:
@@ -88,11 +88,11 @@ class Caching:
                     a = self.corecache.pop(list(self.corecache.keys())[0])
                 self.corecache[key] = result
             else:
-                result = self.download(P)
-            return result, False
+                result = self.download(Q)
+            return result
         except:
             logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
-            return P.data[2:], False
+            return Q.data[2:]
 
     def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isauth:bool=False):
         key = parser(query)
@@ -105,7 +105,7 @@ class Caching:
             if isupload and response.answer:
                 self.temp.append(response)
 
-    def packing(self, rawdata, P:Packet, q:dns.message.Message):
+    def packing(self, rawdata, P:Query, q:dns.message.Message):
         try:
             self.keys = set()
             if rawdata:
@@ -130,7 +130,7 @@ class Caching:
             logging.error('Packing cache data is fail', exc_info=(logging.DEBUG >= logging.root.level))
 
 
-    def download(self, P:Packet):
+    def download(self, P:Query):
         q = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
         qname = q.question[0].name.to_text()
         qtype = dns.rdatatype.to_text(q.question[0].rdtype)

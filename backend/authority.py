@@ -7,7 +7,7 @@ from backend.accessdb import AccessDB, enginer
 from backend.functions import echo
 from backend.transfer import Transfer
 from backend.recursive import Recursive, Depth, _ROOT
-from backend.objects import Packet
+from backend.objects import Query
 import time
 import dns.message
 import dns.rrset
@@ -119,7 +119,7 @@ class Authority:
                     )
 
 
-    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None, P:Packet=None): 
+    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None, P:Query=None): 
         q = dns.message.make_query(cname,qtype,qcls)
         if P and P.check.recursive():
             for i in range(3):
@@ -133,11 +133,11 @@ class Authority:
                     pass
         return []
 
-    def get(self, P:Packet):
+    def get(self, Q:Query):
         try:
-            data = P.data
-            addr = P.addr
-            transport = P.transport
+            data = Q.data
+            addr = Q.addr
+            transport = Q.transport
             isrec = True
             keyring = None
             for i in range(3):
@@ -146,21 +146,21 @@ class Authority:
                         r = echo(data,dns.rcode.REFUSED)
                         return r.to_wire(), r, True
                     
-                    P.query = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
+                    Q.query = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
                     break
                 except dns.message.UnknownTSIGKey:
                     name = dns.name.from_wire(data,12)[0]
                     keyring = dns.tsigkeyring.from_text(self.db.GetTsig(name.to_text()))
                     continue
-            qname = P.query.question[0].name
-            qtype = dns.rdatatype.to_text(P.query.question[0].rdtype)
-            qclass = dns.rdataclass.to_text(P.query.question[0].rdclass)
-            if P.query.ednsflags == dns.flags.DO: DO = True
+            qname = Q.query.question[0].name
+            qtype = dns.rdatatype.to_text(Q.query.question[0].rdtype)
+            qclass = dns.rdataclass.to_text(Q.query.question[0].rdclass)
+            if Q.query.ednsflags == dns.flags.DO: DO = True
             else: DO = False
-            if P.query.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
+            if Q.query.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
                 try:
-                    T = Transfer(self.CONF, qname, addr, keyring, P.query.keyname, P.query.keyalgorithm)
-                    result = T.sendaxfr(P.query,transport)
+                    T = Transfer(self.CONF, qname, addr, keyring, Q.query.keyname, Q.query.keyalgorithm)
+                    result = T.sendaxfr(Q.query,transport)
                     return result, None, False
                 except:
                     logging.error('Sending transfer was failed', exc_info=(logging.DEBUG >= logging.root.level))
@@ -168,7 +168,7 @@ class Authority:
                     return r.to_wire(), r, True
             node, zone, auth, state, sign = self.findnode(qname, qclass)
             if not zone: return None, None, False
-            r = dns.message.make_response(P.query)
+            r = dns.message.make_response(Q.query)
             if state:
                 r.flags += dns.flags.AA
                 if node:
@@ -186,7 +186,7 @@ class Authority:
                                 else:
                                     break
                             elif isrec:
-                                r.answer += self.findcname(cname, qtype, qclass, transport, P)   
+                                r.answer += self.findcname(cname, qtype, qclass, transport, Q)   
                                 break
                             
                 else:
@@ -216,7 +216,7 @@ class Authority:
             
         except:
             logging.error('Get data from local zones is fail.', exc_info=(logging.DEBUG >= logging.root.level))
-            r = echo(P.query,dns.rcode.SERVFAIL)
+            r = echo(Q.query,dns.rcode.SERVFAIL)
             if r: return r.to_wire(), r, True
             else: return None, None, False
 

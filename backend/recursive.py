@@ -16,7 +16,7 @@ import logging
 from netaddr import IPAddress as IP
 from backend.caching import Caching
 from backend.functions import echo
-from backend.objects import Packet
+from backend.objects import Query
 
 _ROOT = [
     "198.41.0.4",           #a.root-servers.net.
@@ -100,7 +100,7 @@ class Recursive:
         except:
             logging.critical('Initialization of recursive module is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
-    def recursive(self, P:Packet, cache:Caching):
+    def recursive(self, P:Query, cache:Caching):
         # - External resolving if specify external DNS server
         try:
             if not P.query: 
