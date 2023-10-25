@@ -106,9 +106,9 @@ class Caching:
             self.sharecache[key] = data[2:]
             if isupload and response.answer:
                 self.temp.append(response)
-                logging.debug(f"Result of query '{Q.get_meta(True)}' was cached and prepare to upload into databse.")
+                logging.debug(f"Result of query {Q.get_meta(True)} was cached and prepare to upload into databse.")
             else:
-                logging.debug(f"Result of query '{Q.get_meta(True)}' was cached.")
+                logging.debug(f"Result of query {Q.get_meta(True)} was cached.")
 
 
     def packing(self, rawdata, P:Query, q:dns.message.Message):

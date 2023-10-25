@@ -70,7 +70,8 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
             if result:
                 if debug: logging.debug(f"Query {Q.get_meta(True)} was returned from authority.")
                 if response:
-                    threading.Thread(target=cache.put, args=(Q, result, response, False, True)).start()
+                    name = '%i-Authority' % Q.id
+                    threading.Thread(target=cache.put, args=(Q, result, response, False, True), name=name).start()
                 return result
 
         if Q.check.recursive():
