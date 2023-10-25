@@ -74,7 +74,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 return result
 
         if Q.check.recursive():
-            name = '%s-%i-Recursive' % (current_process().name, Q.id)
+            name = '%i-Recursive' % (current_process().name, Q.id)
             threading.Thread(target=recursive.recursive, args=(Q, cache), name=name).start()
             return None
 
