@@ -79,7 +79,9 @@ class Caching:
 
     def get(self, Q:Query):
         try:
-            result, key = iterater(Q.data, self.corecache)
+            key = Q.hash
+            result = self.corecache.get(key)
+            #result, key = iterater(Q.data, self.corecache)
             if result: return result
             result = self.sharecache.get(key)
             if result:
@@ -104,6 +106,10 @@ class Caching:
             self.corecache[key] = self.sharecache[key] = data[2:]
             if isupload and response.answer:
                 self.temp.append(response)
+                logging.debug(f"Result of query '{response.question[0].to_text()}' was cached and prepare to upload into databse.")
+            else:
+                logging.debug(f"Result of query '{response.question[0].to_text()}' was cached.")
+
 
     def packing(self, rawdata, P:Query, q:dns.message.Message):
         try:

@@ -1,4 +1,4 @@
-import asyncio
+from asyncio.selector_events import _SelectorSocketTransport as TCP
 import logging
 from multiprocessing.managers import DictProxy, ListProxy
 import random
@@ -39,10 +39,13 @@ class Authority:
     def connect(self, db:AccessDB):
         self.db = db
 
-
-    def findnode(self, qname:dns.name.Name, rdclass:str):
-        name = qname.to_text().lower()
+    def get_zone(self, name:str|dns.message.Message):
+        if isinstance(name, dns.name.Name):
+            name = name.to_text().lower()
+        else:
+            name = name.lower()
         zones = {}
+        sign = zone = None
         rawzones = self.db.GetZones(name.split("."))
         if rawzones:
             for obj in rawzones: zones[obj[0].name] = obj[0].signed
@@ -50,18 +53,39 @@ class Authority:
             zonelist.sort()
             zonelist.reverse()
             for e in zones:
-                sign = zones[e]
                 if e in name:
-                    auth, state = self.findauth(name,e)
-                    rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=e)
-                    if rawdata:
-                        node = [obj[0] for obj in rawdata]
-                    else: node = None
-                    return node, e, auth, state, sign
-        return None, None, None, None, None
+                    sign = zones[e]
+                    zone = e
+        return zone, sign
+                        
+    def get_node(self, qname:dns.name.Name|str, rdclass:str=None):
+        node = []
+        sign = zone = None
+        if isinstance(qname, dns.name.Name):
+            name = qname.to_text().lower()
+        else:
+            name = qname.lower()
+        zone, sign = self.get_zone(name)
+        rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=zone, sign=sign)
+        if rawdata: node = [obj[0] for obj in rawdata]
+        return node, zone, sign
 
-    def findauth(self, name:str, zone):
-        rawdata = self.db.GetFromDomains(qname=name,rdtype='NS',zone=zone, decomposition=True)
+    def fakezone(self, r:dns.message.Message, zone):
+            r.set_rcode(dns.rcode.NXDOMAIN)
+            rawdata = self.db.GetFromDomains(qname=zone,rdclass='IN', rdtype='SOA',zone=zone)
+            if rawdata:
+                soa = rawdata[0][0].data[-1]
+                ttl = rawdata[0][0].ttl
+                record = dns.rrset.from_text(zone,int(ttl),'IN','SOA', soa)
+                r.authority.append(record)
+
+    def check_auth(self, qname:dns.name.Name|str, zone, result:dns.message.Message, sign:bool=False):
+        if isinstance(qname, dns.name.Name):
+            name = qname.to_text().lower()
+        else:
+            name = qname.lower()
+        rdtype = 'NS'
+        rawdata = self.db.GetFromDomains(qname=name,rdtype=rdtype,zone=zone, decomposition=True, sign=sign)
         auth=[]
         high = ''
         state = True
@@ -70,28 +94,27 @@ class Authority:
                 if len(obj[0].name) >= len(high):
                     high = obj[0].name
             for obj in rawdata:
-                if obj[0].name == high:
+                if obj[0].name == high or (obj[0].name == name):
                     auth.append(obj[0])
-        if high != zone: state = False
-        return auth, state
-    
-    def findadd(self, targets:list):
-        rawdata = self.db.GetFromDomains(qname=targets,rdtype='A')
-        if rawdata:
-            add = []
-            for obj in rawdata:
-                add.append(obj[0])
-        return add
-
-    def fakezone(self, r:dns.message.Message, zone):
-            rawdata = self.db.GetFromDomains(qname=zone,rdclass='IN', rdtype='SOA',zone=zone)
-            if rawdata:
-                soa = rawdata[0][0].data[-1]
-                ttl = rawdata[0][0].ttl
-                record = dns.rrset.from_text(zone,int(ttl),'IN','SOA', soa)
-                r.authority.append(record)
+        if sign:
+            keys = []
+            for a in auth:
+                rawdata = self.db.GetFromDomains(qname=a.name, rdtype='NSEC', sign=sign)
+                if rawdata: [keys.append(obj[0]) for obj in rawdata]
+            auth += keys
+        if high != zone: 
+            state = False
+            if sign: qtype = ['NS', 'NSEC']
+            else: qtype = 'NS'
+            result.authority = self.filling(auth,qtype=qtype)
+            targets = [ns for a in auth for ns in a.data]
+            if targets:
+                add = self.additional(targets)
+                result.additional = self.filling(add)
+        return state
 
     def filling(self, data, qname:dns.name.Name=None, qtype:str|list=None):
+
         if isinstance(qtype,str): qtype = [qtype]
         content = []
         for a in data:
@@ -99,127 +122,122 @@ class Authority:
                 if not qname: qname = dns.name.from_text(a.name)
                 content.append(
                     dns.rrset.from_text_list(qname, a.ttl, a.cls, a.type, a.data)
-                )              
+                )       
         return content
     
-    def signer(self, data, zone):
+    def additional(self, targets:list):
+        rawdata = self.db.GetFromDomains(qname=targets,rdtype='A')
+        if rawdata:
+            add = []
+            for obj in rawdata:
+                add.append(obj[0])
+        return add    
+    
+    def cname_lookup(self, Q:Query, result:dns.message.Message, qname, qtype, qclass, DO:bool): 
+        if Q.check.recursive():
+            if DO: DO = dns.flags.DO
+            q = dns.message.make_query(qname,qtype,qclass,ednsflags=DO)
+            for i in range(3):
+                try:
+                    D = Depth()
+                    res, _ = self.recursive.resolve(q, random.choice(_ROOT), Q.transport, D)
+                    break
+                except:
+                    pass
+            if res:
+                result.answer += res.answer
+
+    def signer(self, data):
         types = {}
         for rrset in data:
             name = rrset.name.to_text()
             if name not in types: types[name] = set()
             types[name].add(dns.rdatatype.to_text(rrset.rdtype))
         for name in list(types.keys()):
-            rawdata = self.db.GetFromDomains(name,rdtype='RRSIG',zone=zone)
-            for obj in rawdata:
-                a = obj[0]
-                rdata = str(a.data[0]).split(' ')
-                if rdata[0] in types[name]:
-                    data.append(
-                        dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
-                    )
-
-
-    def findcname(self, cname:str|dns.name.Name, qtype:str|dns.rdatatype.RdataType, qcls:str|dns.rdataclass.RdataClass=dns.rdataclass.IN, transport=None, P:Query=None): 
-        q = dns.message.make_query(cname,qtype,qcls)
-        if P and P.check.recursive():
-            for i in range(3):
-                try:
-                    depth = Depth()
-                    ns = random.choice(_ROOT)
-                    r, _ = self.recursive.resolve(q, ns, transport, depth)
-                    if r:
-                        return r.answer
-                except:
-                    pass
-        return []
+            zone, sign = self.get_zone(name)
+            if zone and sign:
+                rawdata = self.db.GetFromDomains(name,rdtype='RRSIG',zone=zone, sign=True)
+                for obj in rawdata:
+                    a = obj[0]
+                    rdata = str(a.data[0]).split(' ')
+                    if rdata[0] in types[name]:
+                        data.append(
+                            dns.rrset.from_text_list(a.name, a.ttl, a.cls, a.type, a.data)
+                        )
 
     def get(self, Q:Query):
         try:
-            data = Q.data
-            addr = Q.addr
-            transport = Q.transport
-            isrec = True
-            keyring = None
-            for i in range(3):
+            result = None
+            keys = {}
+            keyname = None
+            qname = Q.name
+            qtype = dns.rdatatype.to_text(Q.qtype)
+            qclass = dns.rdataclass.to_text(Q.qclass)
+            for i in range(2):
                 try:
-                    if i > 1:
-                        r = echo(data,dns.rcode.REFUSED)
-                        return r.to_wire(), r, True
-                    
-                    Q.query = dns.message.from_wire(data, ignore_trailing=True, keyring=keyring)
+                    Q.query = q = dns.message.from_wire(Q.data, ignore_trailing=True, keyring=keys)              
                     break
                 except dns.message.UnknownTSIGKey:
-                    name = dns.name.from_wire(data,12)[0]
-                    keyring = dns.tsigkeyring.from_text(self.db.GetTsig(name.to_text()))
-                    continue
-            qname = Q.query.question[0].name
-            qtype = dns.rdatatype.to_text(Q.query.question[0].rdtype)
-            qclass = dns.rdataclass.to_text(Q.query.question[0].rdclass)
-            if Q.query.ednsflags == dns.flags.DO: DO = True
-            else: DO = False
-            if Q.query.had_tsig and qtype == 'AXFR' and isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
-                try:
-                    T = Transfer(self.CONF, qname, addr, keyring, Q.query.keyname, Q.query.keyalgorithm)
-                    result = T.sendaxfr(Q.query,transport)
-                    return result, None, False
+                    keys = dns.tsigkeyring.from_text(self.db.GetTsig(qname.lower()))
+                    if i > 0:
+                        result = echo(Q.data, dns.rcode.REFUSED)
+                        return result.to_wire(), result
                 except:
-                    logging.error('Sending transfer was failed', exc_info=(logging.DEBUG >= logging.root.level))
-                    r = echo(data,dns.rcode.SERVFAIL)
-                    return r.to_wire(), r, True
-            node, zone, auth, state, sign = self.findnode(qname, qclass)
-            if not zone: return None, None, False
-            r = dns.message.make_response(Q.query)
-            if state:
-                r.flags += dns.flags.AA
-                if node:
-                    r.answer = self.filling(node, qname, [qtype, 'CNAME'])
-                    ### -- NEED TO RE THINK -- 
-                    if r.answer and qtype != 'CNAME':
-                        while r.answer[-1].rdtype is dns.rdatatype.CNAME:
-                            cname = dns.name.from_text(r.answer[-1][0].to_text())
-                            crdclass = dns.rdataclass.to_text(r.answer[-1].rdclass)
-                            cnode, zone, auth, state, _ = self.findnode(cname, crdclass)
-                            if cnode:
-                                if state:
-                                    r.answer += self.filling(cnode, cname, [qtype, 'CNAME'])
-                                    break
-                                else:
-                                    break
-                            elif isrec:
-                                r.answer += self.findcname(cname, qtype, qclass, transport, Q)   
-                                break
-                            
-                else:
-                    r.set_rcode(dns.rcode.NXDOMAIN)
-                if not r.answer and not r.authority:
-                    self.fakezone(r,zone)
-            elif auth:
-                targets = []
-                r.authority = self.filling(auth,qtype=None)                  
-                targets = [ns for a in auth for ns in a.data]
-                if targets:
-                    add = self.findadd(targets)
-                    r.additional = self.filling(add)
-            try:
-                if (sign and DO):
-                    self.signer(r.answer, zone)
-                    self.signer(r.authority, zone)
-                    self.signer(r.additional, zone)
-                    r.use_edns(0,dns.flags.DO)
-                return r.to_wire(), r, True
-            except dns.exception.TooBig:
-                if isinstance(transport,asyncio.selector_events._SelectorDatagramTransport):
-                    r = echo(data,flags=[dns.flags.TC])
-                    return r.to_wire(), r, True
-                elif isinstance(transport, asyncio.selector_events._SelectorSocketTransport):
-                    return r.to_wire(max_size=65535), r, True
-            
+                    logging.error('Query is malformed', exc_info=(logging.DEBUG >= logging.root.level))
+                    return None, None
+         
+            if qtype == 'AXFR':
+                if isinstance(Q.transport, TCP):
+                    T = Transfer(self.CONF, qname, tsig=keys, keyname=keyname)
+                    result = T.sendaxfr(q, Q.transport)
+            else:
+                if q.ednsflags == dns.flags.DO: DO = True
+                else: DO = False
+                result = self.authority(Q, qname, qtype, qclass, dns.message.make_response(q), DO)
+                if DO and result:
+                    self.signer(result.answer)
+                    self.signer(result.authority)
+                    self.signer(result.additional)   
+                    result.use_edns(0,dns.flags.DO)            
         except:
             logging.error('Get data from local zones is fail.', exc_info=(logging.DEBUG >= logging.root.level))
-            r = echo(Q.query,dns.rcode.SERVFAIL)
-            if r: return r.to_wire(), r, True
-            else: return None, None, False
+            result = echo(Q.data, dns.rcode.SERVFAIL)
+        finally:
+            if isinstance(result, dns.message.Message):
+                return result.to_wire(max_size=65535), result
+            elif isinstance(result, bytes):
+                return result, None
+            else:
+                return None, None
 
+
+    def authority(self, Q:Query, qname:dns.name.Name, qtype, qclass, result:dns.message.Message, DO:bool=False):
+        
+        node, zone, sign = self.get_node(qname, qclass)
+        if zone:
+            if not dns.flags.AA in result.flags:
+                result.flags = dns.flags.Flag(sum([result.flags, dns.flags.AA]))
+            if node:
+                if self.check_auth(qname, zone, result, (DO and sign)) is False:
+                    pass
+                elif 'CNAME' in [rr.type for rr in node]:
+                    for rr in node:
+                        if rr.type == 'CNAME' and type(rr.data) is list:
+                            canonical = dns.name.from_text(rr.data[-1])
+                            [result.answer.append(rr) for rr in self.filling(node, qname, 'CNAME')]
+                            czone, _ = self.get_zone(canonical)
+                            if czone:
+                                self.authority(Q, canonical, qtype, qclass, result, DO)
+                            else:
+                                self.cname_lookup(Q, result, canonical, qtype, qclass, DO)
+                else:
+                    [result.answer.append(rr) for rr in self.filling(node, qname, qtype)]
+            else:
+                self.fakezone(result, zone)
+            return result
+        else:
+            return None
+        
     '''def download(self, db:AccessDB):
         # --Getting all records from cache tatble
         try:

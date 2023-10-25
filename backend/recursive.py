@@ -229,10 +229,12 @@ class Recursive:
 
     def extresolve(self, query:dns.message.Message):
         try:
-            udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # < - Init Recursive socket
-            udp.settimeout(2) # < - Setting timeout
-            dns.query.send_udp(udp, query, (self.resolver, 53))
-            answer,_ = dns.query.receive_udp(udp,(self.resolver, 53))
+            answer = None
+            for i in range(3):
+                try:
+                    answer = dns.query.udp(query, self.resolver, 2)
+                except:
+                    answer = dns.query.tcp(query, self.resolver, 2)
         except:
             answer = echo(query, dns.rcode.SERVFAIL, [dns.flags.RA])
             logging.error(f'Resolve \'{query.question[0].to_text()}\' querie was failed on \'{self.resolver}\' nameserver', exc_info=(logging.DEBUG >= logging.root.level))

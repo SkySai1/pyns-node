@@ -35,8 +35,9 @@ _COUNT = 0
 def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:tuple, transport, rules):
     try:
 
-
         Q = Query(data, addr, transport)
+        if Q.correct is False: return data
+
         for network in rules:
             if Q.ip in network:
                 Q.set_rules(rules[network])
@@ -73,15 +74,16 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
                 return data[:2]+result
 
         if Q.check.authority():
-            result, response, iscache = auth.get(Q) # <- Try to take data from Authoirty
+            result, response = auth.get(Q) # <- Try to take data from Authoirty
             if result:
                 if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
-                if iscache is True:
+                if response:
                     threading.Thread(target=cache.put, args=(data, result, response, False, True)).start()
                 return result
 
         if Q.check.recursive():
-            threading.Thread(target=recursive.recursive, args=(Q, cache)).start()
+            name = '%s-%i-Recursive' % (current_process().name, Q.id)
+            threading.Thread(target=recursive.recursive, args=(Q, cache), name=name).start()
             if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             return None
 

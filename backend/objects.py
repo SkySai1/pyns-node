@@ -1,6 +1,5 @@
 import asyncio
 import struct
-import ipaddress
 from netaddr import IPNetwork as CIDR, IPAddress as IP
 
 class ThisNode:
@@ -73,14 +72,46 @@ class Rules:
 
 class Query:
     query = None
+    name = None
+    qtype = None
+    qclass = None
+    hash = None
+    id = None
     access = Access
+    correct = True
 
-    def __init__(self, data:bytes, addr:tuple, transport) -> None:
-        self.data = data
-        self.ip = IP(addr[0])
-        self.addr = addr
-        self.transport = transport
-        self.check = self.Check(self.access)
+    def __init__(self, data:bytes, addr:tuple, transport):
+        try:
+            self.data = data
+            self.ip = IP(addr[0])
+            self.addr = addr
+            self.transport = transport
+            self.check = self.Check(self.access)
+            
+            self.get_meta()
+        except:
+            self.correct = False
+
+    def get_meta(self):
+        try:
+            chunks = []
+            part = self.data[13:]
+            p = 0 
+            for t in range(part.__len__()):
+                if part[t] < 48:
+                    chunks.append(part[p:t].decode())
+                    p = t+1
+                if part[t] == 0:
+                    break
+            self.id = struct.unpack('>H', self.data[:2])[0]
+            self.name = '.'.join(chunks)+'.'
+            self.qtype = part[t+2]
+            self.qclass = part[t+4]
+            self.hash = part[:t+13].__hash__()
+            #print(self.name, self.qtype, self.qclass)
+        except Exception as e:
+            print(e)
+
 
     def getperms(self, as_text:bool=False):
         import re

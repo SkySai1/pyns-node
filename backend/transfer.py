@@ -33,7 +33,7 @@ QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
 CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
 class Transfer:
-    def __init__(self, CONF, zone, target, tsig:str|dict|None=None, keyname:str|None=None, algorithm=None):
+    def __init__(self, CONF, zone, target=None, tsig:str|dict|None=None, keyname:str|None=None, algorithm=None):
         try:
             self.timedelta = int(CONF['GENERAL']['timedelta'])
             self.conf = CONF

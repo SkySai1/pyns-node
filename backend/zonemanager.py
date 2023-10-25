@@ -105,9 +105,13 @@ class Zonemaker:
         private_key = load_pem_private_key(pemlines, None, default_backend())
         return private_key     
 
-    def zonecontent(self, name:dns.name.Name):
+    def zonecontent(self, name:dns.name.Name|str):
         try:
-            rawzones = self.db.GetFromDomains(zone=name.to_text())
+            if isinstance(name, dns.name.Name):
+                name = name.to_text().lower()
+            else:
+                name = name.lower()
+            rawzones = self.db.GetFromDomains(zone=name)
             zone = []
             [zone.append((str(obj[0].name), str(obj[0].ttl), str(obj[0].cls), str(obj[0].type), str(obj[0].data[0]))) for obj in rawzones]
             #auth = "\n".join([" ".join(data) for data in zone])
