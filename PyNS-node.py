@@ -48,21 +48,12 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
         # -- DEBUG LOGGING BLOCK START --
         if logging.DEBUG >= logging.root.level and not logging.root.disabled:
             debug = True
-            try:
-                qid = int.from_bytes(data[:2],'big')
-                q = dns.message.from_wire(data,continue_on_error=True)
-                question = q.question[0].to_text()
-                logging.debug(f"Get query({q.id}) from {addr} is '{question}'. Permissions: '{Q.getperms(as_text=True)}.'")
-            except:
-                qid = '00000'
-                logging.debug(f"Query from {addr} is malformed!. Permissions: '{Q.getperms(as_text=True)}.'", exc_info=(logging.DEBUG >= logging.root.level))        
-        else: 
-            debug = None
-
+            logging.debug(f"Get query {Q.get_meta(True)}. Permissions: '{Q.getperms(as_text=True)}.'")
+        else: debug = None
         # -- DEBUG LOGGING BLOCK END --
 
         if Q.check.query() is False:
-            if debug: logging.debug(f"Query({qid}) from {addr} is not Allowed. REFUSED.")
+            if debug: logging.debug(f"Query {Q.get_meta(True)} is not Allowed. REFUSED.")
             result = Q.data[:3] + b'\x05' + Q.data[4:] # <- REFUSED RCODE
             return result
      
@@ -70,13 +61,13 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
         if Q.check.cache():
             result = cache.get(Q) # <- Try to take data from Cache
             if result:
-                if debug: logging.debug(f"Query({qid}) from {addr} was returned from cache.")
+                if debug: logging.debug(f"Query {Q.get_meta(True)} was returned from cache.")
                 return data[:2]+result
 
         if Q.check.authority():
             result, response = auth.get(Q) # <- Try to take data from Authoirty
             if result:
-                if debug: logging.debug(f"Query({qid}) from {addr} was returned from authority.")
+                if debug: logging.debug(f"Query {Q.get_meta(True)} was returned from authority.")
                 if response:
                     threading.Thread(target=cache.put, args=(data, result, response, False, True)).start()
                 return result
@@ -84,7 +75,6 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
         if Q.check.recursive():
             name = '%s-%i-Recursive' % (current_process().name, Q.id)
             threading.Thread(target=recursive.recursive, args=(Q, cache), name=name).start()
-            if debug: logging.debug(f"Query({qid}) from {addr} was returned after recrusive search.")
             return None
 
         return echo(data,dns.rcode.REFUSED).to_wire()

@@ -64,20 +64,6 @@ TLD = {
 
 _DEBUG = 0
 
-QTYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 10:'NULL', 12:'PTR', 13:'HINFO',
-        15:'MX', 16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY',
-        28:'AAAA', 29:'LOC', 33:'SRV', 35:'NAPTR', 36:'KX',
-        37:'CERT', 38:'A6', 39:'DNAME', 41:'OPT', 42:'APL',
-        43:'DS', 44:'SSHFP', 45:'IPSECKEY', 46:'RRSIG', 47:'NSEC',
-        48:'DNSKEY', 49:'DHCID', 50:'NSEC3', 51:'NSEC3PARAM',
-        52:'TLSA', 53:'HIP', 55:'HIP', 59:'CDS', 60:'CDNSKEY',
-        61:'OPENPGPKEY', 62:'CSYNC', 63:'ZONEMD', 64:'SVCB',
-        65:'HTTPS', 99:'SPF', 108:'EUI48', 109:'EUI64', 249:'TKEY',
-        250:'TSIG', 251:'IXFR', 252:'AXFR', 255:'ANY', 256:'URI',
-        257:'CAA', 32768:'TA', 32769:'DLV'}
-
-CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
-
 class Depth:
 
     count = 0
@@ -100,40 +86,41 @@ class Recursive:
         except:
             logging.critical('Initialization of recursive module is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
-    def recursive(self, P:Query, cache:Caching):
+    def recursive(self, Q:Query, cache:Caching):
         # - External resolving if specify external DNS server
         try:
-            if not P.query: 
-                try: P.query = dns.message.from_wire(P.data, continue_on_error=True, ignore_trailing=True)
+            if not Q.query: 
+                try: Q.query = dns.message.from_wire(Q.data, continue_on_error=True, ignore_trailing=True)
                 except:
-                    logging.warning(f"Query from {P.addr} is malformed!") 
+                    logging.warning(f"Query from {Q.addr} is malformed!") 
                     return
             if self.resolver:
-                result = self.extresolve(P.query)
+                result = self.extresolve(Q.query)
             
             # - Internal resolving if it is empty
             else:
                 try:
-                    NS = TLD.get(P.query.question[0].name[1])
+                    NS = TLD.get(Q.query.question[0].name[1])
                     if not NS: NS = _ROOT
                 except:
                     NS = _ROOT
                 random.shuffle(NS)
                 for i in range(3):
                     D = Depth()
-                    result,_ = self.resolve(P.query, NS[i], P.transport, D)
+                    result,_ = self.resolve(Q.query, NS[i], Q.transport, D)
                     if isinstance(result, dns.message.Message): break
                     if i >=1: NS = random.choice(_ROOT)
 
         except:
-            try: info = dns.name.from_wire(P.data,12)[0]
-            except: info = f'from {P.addr}. Querie is malformed!'
+            try: info = dns.name.from_wire(Q.data,12)[0]
+            except: info = f'from {Q.addr}. Querie is malformed!'
             logging.error(f'Recursive search is fail \'{info}\'.', exc_info=(logging.DEBUG >= logging.root.level))
-            result = echo(P.data,dns.rcode.SERVFAIL,[dns.flags.RA])
+            result = echo(Q.data,dns.rcode.SERVFAIL,[dns.flags.RA])
         finally:
             if result:
-                P.response(result.to_wire())
-                cache.put(P.data, result.to_wire(), result, self.iscache)
+                Q.response(result.to_wire())
+                cache.put(Q.data, result.to_wire(), result, self.iscache)
+                logging.debug(f"Query {Q.get_meta(True)} was returned from recursive.")
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport, depth:Depth):
         # -Checking current recursion depth-
@@ -157,6 +144,7 @@ class Recursive:
                         return result, ns
                     if ipaddress.ip_address(ns):
                         result = dns.query.udp(query, ns, self.timeout)
+                        print(result)
                     break
                 except dns.exception.Timeout as e:
                     result = None
@@ -232,7 +220,7 @@ class Recursive:
             answer = None
             for i in range(3):
                 try:
-                    answer = dns.query.udp(query, self.resolver, 2)
+                    answer = dns.query.udp(query, self.resolver, 2, raise_on_truncation=True)
                 except:
                     answer = dns.query.tcp(query, self.resolver, 2)
         except:

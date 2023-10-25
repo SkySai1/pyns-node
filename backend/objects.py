@@ -1,6 +1,10 @@
 import asyncio
+import logging
 import struct
+import dns.rdatatype
+import dns.rdataclass
 from netaddr import IPNetwork as CIDR, IPAddress as IP
+from backend.functions import RDTYPE, RDCLASS
 
 class ThisNode:
     id = None
@@ -88,11 +92,12 @@ class Query:
             self.transport = transport
             self.check = self.Check(self.access)
             
-            self.get_meta()
+            self.set_meta()
         except:
             self.correct = False
 
-    def get_meta(self):
+    def set_meta(self):
+        try:
             chunks = []
             part = self.data[13:]
             p = 0 
@@ -107,7 +112,21 @@ class Query:
             self.qtype = part[t+2]
             self.qclass = part[t+4]
             self.hash = part[:t+13].__hash__()
-            #print(self.name, self.qtype, self.qclass)
+        except:
+            logging.debug(f"Query from {self.addr} is malformed!")
+            self.correct = False
+    
+    def get_meta(self, as_text:bool=False):
+        if as_text:
+            t = RDTYPE.get(self.qtype)
+            if not t: t = self.qtype
+
+            c = RDCLASS.get(self.qclass)
+            if not c: c = self.qclass
+            meta = f"({self.id}) '{self.name} {c} {t}' from {self.addr}"
+        else:
+            meta = (self.id, self.name, self.qclass, self.qtype)
+        return meta
 
 
     def getperms(self, as_text:bool=False):
