@@ -1,4 +1,4 @@
-#!/home/dnspy/server/dns/bin/python3
+#!/home/dnspy/node/dns/bin/python3
 import logging
 import os
 import configparser

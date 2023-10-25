@@ -1,4 +1,4 @@
-#!./dns/bin/python
+#!/home/dnspy/node/dns/bin/python3
 # distutils: language=3
 
 from setuptools import setup

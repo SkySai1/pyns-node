@@ -178,7 +178,7 @@ class Authority:
                     Q.query = q = dns.message.from_wire(Q.data, ignore_trailing=True, keyring=keys)              
                     break
                 except dns.message.UnknownTSIGKey:
-                    keys = dns.tsigkeyring.from_text(self.db.GetTsig(qname.lower()))
+                    keys = dns.tsigkeyring.from_text(self.db.GetTsig(qname))
                     if i > 0:
                         result = echo(Q.data, dns.rcode.REFUSED)
                         return result.to_wire(), result
@@ -186,7 +186,7 @@ class Authority:
                     logging.error('Query is malformed', exc_info=(logging.DEBUG >= logging.root.level))
                     return None, None
          
-            if qtype == 'AXFR':
+            if qtype == 'AXFR' and Q.query.had_tsig:
                 if isinstance(Q.transport, TCP):
                     T = Transfer(self.CONF, qname, tsig=keys, keyname=keyname)
                     result = T.sendaxfr(q, Q.transport)

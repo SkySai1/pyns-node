@@ -1,4 +1,4 @@
-#!/home/dnspy/server/dns/bin/python3
+#!/home/dnspy/node/dns/bin/python3
 import ipaddress
 import random
 import re
@@ -119,7 +119,7 @@ class Recursive:
         finally:
             if result:
                 Q.response(result.to_wire())
-                cache.put(Q.data, result.to_wire(), result, self.iscache)
+                cache.put(Q, result.to_wire(), result, self.iscache)
                 logging.debug(f"Query {Q.get_meta(True)} was returned from recursive.")
 
     def resolve(self, query:dns.message.QueryMessage, ns, transport, depth:Depth):
@@ -144,7 +144,6 @@ class Recursive:
                         return result, ns
                     if ipaddress.ip_address(ns):
                         result = dns.query.udp(query, ns, self.timeout)
-                        print(result)
                     break
                 except dns.exception.Timeout as e:
                     result = None

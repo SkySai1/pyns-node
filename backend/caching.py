@@ -81,7 +81,6 @@ class Caching:
         try:
             key = Q.hash
             result = self.corecache.get(key)
-            #result, key = iterater(Q.data, self.corecache)
             if result: return result
             result = self.sharecache.get(key)
             if result:
@@ -96,14 +95,15 @@ class Caching:
             logging.warning('Get local cache is fail', exc_info=(logging.DEBUG >= logging.root.level))
             return Q.data[2:]
 
-    def put(self, query:bytes, data:bytes, response:dns.message.Message, isupload:bool=True, isauth:bool=False):
-        key = parser(query)
+    def put(self, Q:Query, data:bytes, response:dns.message.Message, isupload:bool=True, isauth:bool=False):
+        key = Q.hash
         if not key in self.sharecache and self.refresh > 0:
             if isauth:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD + dns.flags.AA)
             else:
                 response.flags = dns.flags.Flag(dns.flags.QR + dns.flags.RD)
-            self.corecache[key] = self.sharecache[key] = data[2:]
+            self.corecache[key] = data[2:]
+            self.sharecache[key] = data[2:]
             if isupload and response.answer:
                 self.temp.append(response)
                 logging.debug(f"Result of query '{response.question[0].to_text()}' was cached and prepare to upload into databse.")

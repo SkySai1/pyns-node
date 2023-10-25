@@ -153,9 +153,13 @@ class AccessDB:
         return self.c.execute(stmt).fetchall()
     
     def GetTsig(self, qname:str, keyname:str=None):
+        if isinstance(qname, dns.name.Name):
+            name = qname.to_text().lower()
+        else:
+            name = qname.lower()
         if not keyname: keyname = (Tkeys.name == Tkeys.name)
         else: keyname = (Tkeys.name == keyname)
-        spl = qname.split('.')
+        spl = name.split('.')
         decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
         stmt = (select(Tkeys)
                 .join(Join_ZonesTkeys, Join_ZonesTkeys.tkey_id == Tkeys.id)

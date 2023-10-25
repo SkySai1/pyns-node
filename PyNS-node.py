@@ -1,4 +1,4 @@
-#!/home/dnspy/server/dns/bin/python3
+#!/home/dnspy/node/dns/bin/python3
 import datetime
 import ipaddress
 import logging
@@ -69,7 +69,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
             if result:
                 if debug: logging.debug(f"Query {Q.get_meta(True)} was returned from authority.")
                 if response:
-                    threading.Thread(target=cache.put, args=(data, result, response, False, True)).start()
+                    threading.Thread(target=cache.put, args=(Q, result, response, False, True)).start()
                 return result
 
         if Q.check.recursive():

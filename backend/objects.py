@@ -1,8 +1,7 @@
 import asyncio
 import logging
 import struct
-import dns.rdatatype
-import dns.rdataclass
+import dns.name
 from netaddr import IPNetwork as CIDR, IPAddress as IP
 from backend.functions import RDTYPE, RDCLASS
 
@@ -99,19 +98,28 @@ class Query:
     def set_meta(self):
         try:
             chunks = []
-            part = self.data[13:]
-            p = 0 
+            part = self.data[12:]
+            i = 0
             for t in range(part.__len__()):
-                if part[t] < 48:
-                    chunks.append(part[p:t].decode())
-                    p = t+1
-                if part[t] == 0:
-                    break
+                ptr = part[i]
+                #if ptr > 64: raise Exception
+                if ptr == 0: break
+                i+=1
+                chunks.append(part[i:i+ptr].decode())
+                i+=ptr
             self.id = struct.unpack('>H', self.data[:2])[0]
             self.name = '.'.join(chunks)+'.'
-            self.qtype = part[t+2]
-            self.qclass = part[t+4]
-            self.hash = part[:t+13].__hash__()
+            self.qtype = part[i+2]
+            self.qclass = part[i+4]
+            self.hash = part[:i+13].__hash__()
+
+            '''part = self.data[12:]
+            self.id = struct.unpack('>H', self.data[:2])[0]
+            self.name, l = dns.name.from_wire(part, 0)
+            self.qtype = part[l+1]
+            self.qclass = part[l+3]
+            self.hash = part[:l+12].__hash__()'''
+            #print('Q:', self.name, self.qtype, self.qclass, self.hash)
         except:
             logging.debug(f"Query from {self.addr} is malformed!")
             self.correct = False
