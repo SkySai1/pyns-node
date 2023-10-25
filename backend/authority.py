@@ -184,7 +184,7 @@ class Authority:
                         result = echo(Q.data, dns.rcode.REFUSED)
                         return result.to_wire(), result
                 except:
-                    logging.error('Query is malformed', exc_info=(logging.DEBUG >= logging.root.level))
+                    logging.error('Query is malformed')
                     return None, None
             if qtype == 'AXFR' and Q.query.had_tsig:
                 if isinstance(Q.transport, TCP):

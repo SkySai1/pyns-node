@@ -159,7 +159,8 @@ class Caching:
                 queries = []
                 for data in self.sharecache.values():
                     q = dns.message.from_wire(emptyid+data,continue_on_error=True, ignore_trailing=True)
-                    queries.append(f"'{q.question[0].to_text()}'")                   
+                    if len(q.question) > 0:
+                        queries.append(f"'{q.question[0].to_text()}'")                   
                 logging.debug(f"Data in local cache: {'; '.join(queries)}")
             # -- DEBUG LOGGING BLOCK END --
 

@@ -55,7 +55,8 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
         if Q.check.query() is False:
             if debug: logging.debug(f"Query {Q.get_meta(True)} is not Allowed. REFUSED.")
             result = Q.data[:3] + b'\x05' + Q.data[4:] # <- REFUSED RCODE
-            return result
+            if result: return result
+            else: return None
      
 
         if Q.check.cache():
