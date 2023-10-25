@@ -93,7 +93,6 @@ class Query:
             self.correct = False
 
     def get_meta(self):
-        try:
             chunks = []
             part = self.data[13:]
             p = 0 
@@ -109,8 +108,6 @@ class Query:
             self.qclass = part[t+4]
             self.hash = part[:t+13].__hash__()
             #print(self.name, self.qtype, self.qclass)
-        except Exception as e:
-            print(e)
 
 
     def getperms(self, as_text:bool=False):
