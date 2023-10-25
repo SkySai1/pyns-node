@@ -3,7 +3,7 @@ import logging
 import time
 import uuid
 import sys
-import psycopg2
+import dns.name
 import dns.rdataclass
 import dns.rdatatype
 from sqlalchemy import engine, UUID, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, ARRAY, exc, create_engine, delete, insert, select, or_, not_, update
@@ -153,26 +153,31 @@ class AccessDB:
         return self.c.execute(stmt).fetchall()
     
     def GetTsig(self, qname:str, keyname:str=None):
-        if isinstance(qname, dns.name.Name):
-            name = qname.to_text().lower()
-        else:
-            name = qname.lower()
-        if not keyname: keyname = (Tkeys.name == Tkeys.name)
-        else: keyname = (Tkeys.name == keyname)
-        spl = name.split('.')
-        decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
-        stmt = (select(Tkeys)
-                .join(Join_ZonesTkeys, Join_ZonesTkeys.tkey_id == Tkeys.id)
-                .join(Zones, Join_ZonesTkeys.zone_id == Zones.id)
-                .filter(keyname)
-                .filter(Zones.name.in_(decomp))
-        )
-        rawkeys = self.c.execute(stmt).fetchall()
-        keylist = {}
-        for obj in rawkeys:
-            obj = obj[0]
-            keylist[obj.name] = obj.value
-        return keylist
+        try:
+            if isinstance(qname, dns.name.Name):
+                name = qname.to_text().lower()
+            else:
+                name = qname.lower()
+            if not keyname: keyname = (Tkeys.name == Tkeys.name)
+            else: keyname = (Tkeys.name == keyname)
+            spl = name.split('.')
+            decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
+            stmt = (select(Tkeys)
+                    .join(Join_ZonesTkeys, Join_ZonesTkeys.tkey_id == Tkeys.id)
+                    .join(Zones, Join_ZonesTkeys.zone_id == Zones.id)
+                    .filter(keyname)
+                    .filter(Zones.name.in_(decomp))
+            )
+            rawkeys = self.c.execute(stmt).fetchall()
+            keylist = {}
+            for obj in rawkeys:
+                obj = obj[0]
+                keylist[obj.name] = obj.value
+            return keylist
+        except Exception as e:
+            logging.error('Get TSIG keys is fail', exc_info=(logging.DEBUG >= logging.root.level))
+            if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
+                self.drop()                
 
     def NewTsig(self, keyname, key):
         try:

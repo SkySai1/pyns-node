@@ -119,7 +119,7 @@ class Query:
             self.qtype = part[l+1]
             self.qclass = part[l+3]
             self.hash = part[:l+12].__hash__()'''
-            #print('Q:', self.name, self.qtype, self.qclass, self.hash)
+            #if self.addr[0] == '95.165.134.11': print('Q:', self.name, self.qtype, self.qclass, self.hash)
         except:
             logging.debug(f"Query from {self.addr} is malformed!")
             self.correct = False

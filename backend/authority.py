@@ -180,12 +180,12 @@ class Authority:
                 except dns.message.UnknownTSIGKey:
                     keys = dns.tsigkeyring.from_text(self.db.GetTsig(qname))
                     if i > 0:
+                        logging.info(f"Query {Q.get_meta(True)} with unkown TSIG key. REFUSED")
                         result = echo(Q.data, dns.rcode.REFUSED)
                         return result.to_wire(), result
                 except:
                     logging.error('Query is malformed', exc_info=(logging.DEBUG >= logging.root.level))
                     return None, None
-         
             if qtype == 'AXFR' and Q.query.had_tsig:
                 if isinstance(Q.transport, TCP):
                     T = Transfer(self.CONF, qname, tsig=keys, keyname=keyname)
