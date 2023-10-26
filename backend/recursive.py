@@ -139,25 +139,25 @@ class Recursive:
             for i in range(self.retry):
                 try:
                     if IP(ns) in self.listen:
-                        logging.warning(f"Query loop detected at {query.question[0].to_text()}")
+                        logging.warning(f"Recursive loop detected at query {query.question[0].to_text()}")
                         result = echo(query,dns.rcode.SERVFAIL)
                         return result, ns
                     if ipaddress.ip_address(ns):
-                        result = dns.query.udp(query, ns, self.timeout)
+                        result = dns.query.udp(query, ns, self.timeout, raise_on_truncation=True)
                     break
-                except dns.exception.Timeout as e:
+                except (ValueError, dns.exception.Timeout):
                     result = None
+                    break
+                except dns.message.Truncated:
+                    result = dns.query.tcp(query, ns, self.timeout)
+                except:
                     pass
-                except ValueError:
-                    result = None
-                    break
+                
             if _DEBUG in [2,3]: print(result,'\n\n')  # <- SOME DEBUG
             if not result: 
                 return None, ns
             if query.id != result.id:
-                raise Exception('ID mismatch!')
-            if dns.flags.TC in result.flags:
-                result = dns.query.tcp(query, ns, self.timeout)
+                raise Exception('ID mismatch!')              
         except dns.exception.Timeout:
             logging.warning(f'Query\'{query.question[0].to_text()}\' is timeout on {ns}.', exc_info=(logging.DEBUG >= logging.root.level))
             return None, ns

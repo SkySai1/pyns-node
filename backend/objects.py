@@ -131,7 +131,7 @@ class Query:
 
             c = RDCLASS.get(self.qclass)
             if not c: c = self.qclass
-            meta = f"({self.id}) '{self.name} {c} {t}' from {self.addr}"
+            meta = f"({self.id}) '{self.name} {c} {t}' from {self.addr[0]}#{self.addr[1]}"
         else:
             meta = (self.id, self.name, self.qclass, self.qtype)
         return meta

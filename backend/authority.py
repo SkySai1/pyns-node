@@ -220,16 +220,19 @@ class Authority:
             if node:
                 if self.check_auth(qname, zone, result, (DO and sign)) is False:
                     pass
-                elif 'CNAME' in [rr.type for rr in node]:
+                elif 'CNAME' in [rr.type for rr in node] and qtype != 'CNAME':
                     for rr in node:
                         if rr.type == 'CNAME' and type(rr.data) is list:
                             canonical = dns.name.from_text(rr.data[-1])
-                            [result.answer.append(rr) for rr in self.filling(node, qname, 'CNAME')]
-                            czone, _ = self.get_zone(canonical)
-                            if czone:
-                                self.authority(Q, canonical, qtype, qclass, result, DO)
+                            if qname == canonical:
+                                logging.warning(f"Authority loop detected at query {Q.get_meta(True)}")
                             else:
-                                self.cname_lookup(Q, result, canonical, qtype, qclass, DO)
+                                [result.answer.append(rr) for rr in self.filling(node, qname, 'CNAME')]
+                                czone, _ = self.get_zone(canonical)
+                                if czone:
+                                    self.authority(Q, canonical, qtype, qclass, result, DO)
+                                else:
+                                    self.cname_lookup(Q, result, canonical, qtype, qclass, DO)
                 else:
                     [result.answer.append(rr) for rr in self.filling(node, qname, qtype)]
             else:

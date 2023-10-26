@@ -261,16 +261,16 @@ class AccessDB:
     def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype:str|list = None, zone=None, decomposition:bool=False, sign:bool=False):
         try:
             if decomposition is False:
-                if not qname: state = (Domains.name == Domains.name)
+                if not qname: domain = (Domains.name == Domains.name)
                 else: 
                     if isinstance(qname,str): 
-                        state = (Domains.name == qname)
+                        domain = (Domains.name == qname)
                     elif isinstance(qname,list):
-                        state = (Domains.name.in_(qname))
+                        domain = (Domains.name.in_(qname))
             else:
                 spl = qname.split('.')
                 decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
-                state = (Domains.name.in_(decomp))     
+                domain = (Domains.name.in_(decomp))     
 
             if not rdtype: rdtype = (Domains.type == Domains.type)
             else:
@@ -284,7 +284,7 @@ class AccessDB:
             if sign is False: sign = (Domains.type.not_in(['DNSKEY', 'RRSIG', 'NSEC', 'DS', 'CDS', 'CDNSKEY']))
             else: sign = (Domains.type == Domains.type)
             stmt = (select(Domains, Zones).join(Zones)
-                    .filter(state)
+                    .filter(domain)
                     .filter(rdtype)
                     .filter(sign)
                     .filter(Domains.cls == rdclass)
