@@ -1,5 +1,6 @@
 import datetime
 import logging
+import re
 import time
 import uuid
 import sys
@@ -258,19 +259,23 @@ class AccessDB:
 
 
     # -- Get data from Domains table
-    def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype:str|list = None, zone=None, decomposition:bool=False, sign:bool=False):
+    def GetFromDomains(self, qname:str|list = None, rdclass = None, rdtype:str|list = None, zone=None, decomposition:bool=False, sign:bool=False, wildcard:bool=False):
         try:
-            if decomposition is False:
+            if decomposition or wildcard:
+                spl = qname.split('.')
+                decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
+                if wildcard:
+                    wildcard = decomp[0:1] + [re.sub('^[a-zA-Z0-9\-\*]*\.','*.',a) for a in decomp]                       
+                    domain = (Domains.name.in_(wildcard))
+                else:
+                    domain = (Domains.name.in_(decomp))
+            else:
                 if not qname: domain = (Domains.name == Domains.name)
                 else: 
-                    if isinstance(qname,str): 
+                    if isinstance(qname,str):
                         domain = (Domains.name == qname)
                     elif isinstance(qname,list):
                         domain = (Domains.name.in_(qname))
-            else:
-                spl = qname.split('.')
-                decomp = [".".join(spl[x:-1])+'.' for x in range(len(spl))]
-                domain = (Domains.name.in_(decomp))     
 
             if not rdtype: rdtype = (Domains.type == Domains.type)
             else:
@@ -293,6 +298,7 @@ class AccessDB:
             result = self.c.execute(stmt).fetchall()
             return result
         except Exception as e:
+            print(e)
             logging.error('Retrieve domains data from database is fail', exc_info=(logging.DEBUG >= logging.root.level))
             if isinstance(e,(exc.PendingRollbackError, exc.OperationalError)):
                 self.drop()

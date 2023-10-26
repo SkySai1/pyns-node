@@ -66,8 +66,22 @@ class Authority:
         else:
             name = qname.lower()
         zone, sign = self.get_zone(name)
-        rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=zone, sign=sign)
-        if rawdata: node = [obj[0] for obj in rawdata]
+        rawdata = self.db.GetFromDomains(qname=name,rdclass=rdclass, zone=zone, sign=sign, wildcard=True)
+        if rawdata:
+            domains = {}
+            for obj in rawdata:
+                d = obj[0]
+                if not domains.get(d.name): domains[d.name] = []
+                domains[d.name].append(d)
+            keys = list(domains.keys())
+            if name in keys:
+                circa = name
+            else:
+                circa = ''
+                for name in keys:
+                    if len(name) > len(circa):
+                        circa = name
+            node = domains[circa]
         return node, zone, sign
 
     def fakezone(self, r:dns.message.Message, zone):
