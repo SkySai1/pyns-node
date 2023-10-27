@@ -9,7 +9,7 @@ import ipaddress
 from netaddr import IPAddress as IP
 
 _OPTIONS ={
-    'GENERAL': ['mode','listen-ip', 'listen-port', 'printstats', 'timedelta'],
+    'GENERAL': ['on-container','mode','listen-ip', 'listen-port', 'printstats', 'timedelta'],
     'DATABASE': ['dbuser', 'dbpass', 'dbhost', 'dbport', 'dbname',  'timesync', 'node'],
     'AUTHORITY': [],
     'CACHING': ['expire', 'scale', 'size', 'download', 'upload'],
@@ -18,6 +18,24 @@ _OPTIONS ={
     'ACCESS': [],
 }
 
+def setup():
+    try:
+        if sys.argv[1:]:
+            path = os.path.abspath(sys.argv[1])
+            if os.path.exists(path):
+                CONF, state = getconf(sys.argv[1]) # <- for manual start
+            else:
+                print('Missing config file at %s' % path)
+        else:
+            thisdir = os.path.dirname(os.path.abspath(__file__))
+            CONF, state = getconf(thisdir+'/config.ini')
+        if state is False:
+            raise Exception()
+        return CONF
+    except Exception as e:
+        logging.critical(f'Error with manual start - {e}')
+        sys.exit(1)
+
 def getconf(path):
     config = configparser.ConfigParser()
     config.read(path)
@@ -25,7 +43,7 @@ def getconf(path):
     try:
         for section in _OPTIONS:
             for key in _OPTIONS[section]:
-                if config.has_option(section, key) is not True: bad.append(f'Bad config file: missing key - {key} in {section} section')
+                if config.has_option(section, key) is not True: bad.append(f'Bad config file: missing key - \'{key}\' in {section} section')
         if bad: raise Exception("\n".join(bad))
         if checkconf(config) is True:
             return config, True
@@ -41,6 +59,7 @@ def checkconf(CONF:configparser.ConfigParser):
         for s in CONF:
             for opt in CONF.items(s):
                 try:
+                    if opt[0] == 'on-container': eval(opt[1])
                     if opt[0] == 'mode' and opt[1] not in ['unit', 'alone', 'proxy']: raise Exception                    
                     if opt[0] == 'listen-ip': [IP(ip) for ip in re.sub('\s','',str(opt[1])).split(',')]
                     if opt[0] == 'listen-port': int(opt[1])
@@ -114,6 +133,8 @@ def deafultconf():
     DBPass = str(input('Input PASSWORD of your Data Base\'s user:\n'))
     DBName = str(input('Input BASENAME of your Data Base\n'))
     config['GENERAL'] = {
+        ";IF it run from container like Docker set it to True":None,
+        'on-container': False,
         ";Possible modes (only work is unit)":None,
         "; 'unit' - as part of PyNS system with database interaction":None,
         "; 'alone' - independent DNS server with load zones from files":None,

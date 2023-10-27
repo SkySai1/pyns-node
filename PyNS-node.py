@@ -22,7 +22,7 @@ from backend.authority import Authority
 from backend.caching import Caching
 from backend.recursive import Recursive
 from backend.objects import Query, Rules
-from initconf import getconf
+from initconf import setup
 from backend.helper import Helper
 from backend.functions import echo
 from backend.logger import LogServer, logsetup
@@ -248,7 +248,8 @@ def counter(pipe, output:bool = False):
         logging.error('Some problem with counter.', exc_info=(logging.DEBUG >= logging.root.level))
         
 # --- Main Function ---
-def start(CONF):
+def start():
+    CONF = setup()
     ThisNode.name = CONF['DATABASE']['node']
     logreciever = logsetup(CONF, __name__)
     rules = {}
@@ -313,22 +314,7 @@ def start(CONF):
 
 
 if __name__ == "__main__":
-    try:
-        if sys.argv[1:]:
-            path = os.path.abspath(sys.argv[1])
-            if os.path.exists(path):
-                CONF, state = getconf(sys.argv[1]) # <- for manual start
-            else:
-                print('Missing config file at %s' % path)
-        else:
-            thisdir = os.path.dirname(os.path.abspath(__file__))
-            CONF, state = getconf(thisdir+'/config.ini')
-        if state is False:
-            raise Exception()
-    except Exception as e:
-        logging.critical(f'Error with manual start - {e}')
-        sys.exit(1)
-    start(CONF)
+    start()
 
     
 

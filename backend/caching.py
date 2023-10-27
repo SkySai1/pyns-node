@@ -16,8 +16,6 @@ import sys
 from backend.accessdb import AccessDB
 from backend.functions import getnow
 from backend.objects import Query
-try: from backend.cparser import parser, iterater
-except: from backend.parser import parser, iterater
 
 # --- Cahe job ---
 class Caching:
@@ -111,14 +109,14 @@ class Caching:
                 logging.debug(f"Result of query {Q.get_meta(True)} was cached.")
 
 
-    def packing(self, rawdata, P:Query, q:dns.message.Message):
+    def packing(self, rawdata, Q:Query, q:dns.message.Message):
         try:
             self.keys = set()
             if rawdata:
                 for obj in rawdata:
                     row = obj[0]
                     name = row.name.encode('idna').decode('utf-8')
-                    key = parser(q.to_wire())
+                    key = Q.hash
                     if not key in self.sharecache:
                         r = dns.message.make_response(q)
                         for d in row.data:
