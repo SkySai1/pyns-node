@@ -76,7 +76,7 @@ def handle(auth:Authority, recursive:Recursive, cache:Caching, data:bytes, addr:
 
         if Q.check.recursive():
             name = '%i-Recursive' % Q.id
-            threading.Thread(target=recursive.recursive, args=(Q, cache), name=name).start()
+            threading.Thread(target=recursive.get, args=(Q, cache), name=name).start()
             return None
 
         return echo(data,dns.rcode.REFUSED).to_wire()

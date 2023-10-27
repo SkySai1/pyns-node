@@ -86,7 +86,7 @@ class Recursive:
         except:
             logging.critical('Initialization of recursive module is fail.', exc_info=(logging.DEBUG >= logging.root.level))
 
-    def recursive(self, Q:Query, cache:Caching):
+    def get(self, Q:Query, cache:Caching):
         # - External resolving if specify external DNS server
         try:
             if not Q.query: 
