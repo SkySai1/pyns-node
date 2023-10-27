@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import struct
 import dns.name
 from netaddr import IPNetwork as CIDR, IPAddress as IP
@@ -102,10 +103,11 @@ class Query:
             i = 0
             for t in range(part.__len__()):
                 ptr = part[i]
-                #if ptr > 64: raise Exception
+                if ptr > 64: raise Exception
                 if ptr == 0: break
                 i+=1
                 chunks.append(part[i:i+ptr].decode())
+                if not re.match('^[A-z][A-z0-9\-]*$', chunks[-1]): raise Exception
                 i+=ptr
             self.id = struct.unpack('>H', self.data[:2])[0]
             self.name = '.'.join(chunks)+'.'
@@ -119,7 +121,6 @@ class Query:
             self.qtype = part[l+1]
             self.qclass = part[l+3]
             self.hash = part[:l+12].__hash__()'''
-            #if self.addr[0] == '95.165.134.11': print('Q:', self.name, self.qtype, self.qclass, self.hash)
         except:
             logging.debug(f"Query from {self.addr} is malformed!")
             self.correct = False
